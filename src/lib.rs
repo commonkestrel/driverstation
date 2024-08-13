@@ -1,7 +1,7 @@
 mod recv {
+    pub mod entry;
     pub mod tcp;
     pub mod udp;
-    pub mod entry;
 }
 
 use serde::{Deserialize, Serialize};
@@ -11,7 +11,7 @@ const TCP_PORT: u16 = 1740;
 
 const SIM_TCP_ADDR: &str = "127.0.0.1:1740";
 const SIM_UDP_ADDR: &str = "127.0.0.1:1110";
-// There's probably an IP address that DriverStation connects from 
+// There's probably an IP address that DriverStation connects from
 const DS_UDP_ADDR: &str = "127.0.0.1:64651";
 
 pub struct Robot {
@@ -108,7 +108,7 @@ impl Control {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all="snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum Mode {
     Teleoperated,
     Autonomous,
@@ -134,7 +134,7 @@ impl Mode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all="snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum Station {
     Red1,
     Red2,

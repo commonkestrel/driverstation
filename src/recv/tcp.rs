@@ -8,5 +8,5 @@ pub enum Event {
     UsageReport {
         team_num: [c_char; 2],
         entries: Vec<Entry>,
-    }
+    },
 }
