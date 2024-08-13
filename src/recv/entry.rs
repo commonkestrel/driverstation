@@ -3,224 +3,246 @@ use std::{
     mem::{self, size_of},
 };
 
-#[derive(Debug, Clone)]
+use macros::ParseEntries;
+
+#[derive(Debug, Clone, ParseEntries)]
 pub enum Entry {
+    #[entry(b"A")]
     Controller,
+    #[entry(b"B")]
     Module,
+    #[entry(b"C")]
     Language(Language),
+    #[entry(b"D")]
     CANPlugin,
+    #[entry(b"E")]
     Accelerometer {
         channel: u8,
     },
+    #[entry(b"F")]
     ADXL345(ADXL345),
+    #[entry(b"G")]
     AnalogChannel {
         channel: u8,
     },
+    #[entry(b"H")]
     AnalogTrigger {
         channel: u8,
     },
+    #[entry(b"I")]
     AnalogTriggerOutput {
         index: u8,
         ty: Trigger,
     },
+    #[entry(b"J")]
     CANJaguar,
+    #[entry(b"K")]
     Compressor {
         pcm_id: u8,
     },
+    #[entry(b"L")]
     Counter {
         index: u8,
         mode: CounterMode,
     },
+    #[entry(b"M")]
     Dashboard,
+    #[entry(b"N")]
     DigitalInput {
         channel: u8,
     },
+    #[entry(b"O")]
     DigitalOutput {
         channel: u8,
     },
+    #[entry(b"P")]
     DriverStationCIO,
+    #[entry(b"Q")]
     DriverStationEIO,
+    #[entry(b"R")]
     DriverStationLCD,
+    #[entry(b"S")]
     Encoder {
         fpga_index: u8,
         encoding: Encoding,
     },
+    #[entry(b"T")]
     GearTooth {
         channel: u8,
     },
+    #[entry(b"U")]
     Gyro {
         channel: u8,
     },
+    #[entry(b"V")]
     I2C {
         address: u8,
     },
+    #[entry(b"W")]
     Framework(Framework),
+    #[entry(b"X")]
     Jaguar {
         channel: u8,
     },
+    #[entry(b"Y")]
     Joystick {
         port: u8,
     },
+    #[entry(b"Z")]
     Kinect,
+    #[entry(b"a")]
     KinectStick,
+    #[entry(b"b")]
     PIDController {
         /// The instance number.
         /// Starts at `1`.
         instance: u8,
     },
+    #[entry(b"c")]
     Preferences,
+    #[entry(b"d")]
     PWM {
         channel: u8,
     },
+    #[entry(b"e")]
     Relay {
         channel: u8,
         reversable: bool,
     },
+    #[entry(b"f")]
     RobotDrive {
         motors: u8,
         ty: DriveType,
     },
+    #[entry(b"g")]
     SerialPort,
+    #[entry(b"h")]
     Servo {
         channel: u8,
     },
+    #[entry(b"i")]
     Solenoid {
         channel: u8,
     },
+    #[entry(b"j")]
     SPI {
         /// The instance number.
         /// Starts at `1`.
         instance: u8,
     },
+    #[entry(b"k")]
     Task,
+    #[entry(b"l")]
     Ultrasonic {
         channel: u8,
     },
+    #[entry(b"m")]
     Victor {
         channel: u8,
     },
+    #[entry(b"n")]
     Button,
+    #[entry(b"o")]
     Command,
+    #[entry(b"p")]
     AxisCamera {
         handle: u8,
     },
+    #[entry(b"q")]
     PCVideoServer {
         handle: u8,
     },
+    #[entry(b"r")]
     SmartDashboard,
+    #[entry(b"s")]
     Talon {
         channel: u8,
     },
+    #[entry(b"t")]
     HiTechnicColorSensor,
+    #[entry(b"u")]
     HiTechnicAccel,
+    #[entry(b"v")]
     HiTechnicCompass,
+    #[entry(b"w")]
     SRF08 {
         channel: u8,
     },
+    #[entry(b"x")]
     AnalogOutput,
+    #[entry(b"y")]
     VictorSP {
         channel: u8,
     },
+    #[entry(b"z")]
     PWMTalonSRC {
         channel: u8,
     },
+    #[entry(b">A")]
     CANTalonSRX {
         channel: u8,
     },
+    #[entry(b">B")]
     ADXL362 {
         port: SPIPort,
     },
+    #[entry(b">C")]
     ADXRS450 {
         port: SPIPort,
     },
+    #[entry(b">D")]
     RevSPARK {
         channel: u8,
     },
+    #[entry(b">E")]
     MindsensorsSD540 {
         channel: u8,
     },
+    #[entry(b">F")]
     DigitalFilter {
         channel: u8,
     },
+    #[entry(b">G")]
     ADIS16448,
+    #[entry(b">H")]
     PDP,
+    #[entry(b">I")]
     PCM,
+    #[entry(b">J")]
     PigeonIMU {
         id: u8,
     },
+    #[entry(b">K")]
     NidecBrushless {
         channel: u8,
     },
+    #[entry(b">L")]
     CANifier {
         id: u8,
     },
+    #[entry(b">M")]
     CTRE_future0 {
         id: u8,
     },
+    #[entry(b">N")]
     CTRE_future1 {
         id: u8,
     },
+    #[entry(b">O")]
     CTRE_future2 {
         id: u8,
     },
+    #[entry(b">P")]
     CTRE_future3 {
         id: u8,
     },
+    #[entry(b">Q")]
     CTRE_future4,
+    #[entry(b">R")]
     CTRE_future5,
+    #[entry(b">S")]
     CTRE_future6,
-}
-
-impl Entry {
-    pub fn entries_from_string(source: CString) -> Vec<Entry> {
-        let bytes = source.into_bytes();
-        let mut entries = Vec::new();
-
-        let mut i = 0;
-        while i < bytes.len() {
-            match bytes[i] {
-                b'A' => entries.push(Entry::Controller),
-                b'B' => entries.push(Entry::Module),
-                b'C' => entries.push(Entry::Language(Entry::parse_instance(&mut i, &bytes))),
-                b'D' => entries.push(Entry::CANPlugin),
-                b'E' => entries.push(Entry::Accelerometer {
-                    channel: Entry::parse_instance(&mut i, &bytes),
-                }),
-                b'F' => entries.push(Entry::ADXL345(Entry::parse_instance(&mut i, &bytes))),
-                b'G' => entries.push(Entry::AnalogChannel {
-                    channel: Entry::parse_instance(&mut i, &bytes),
-                }),
-                b'H' => entries.push(Entry::AnalogTrigger {
-                    channel: Entry::parse_instance(&mut i, &bytes),
-                }),
-                b'I' => {
-                    let index = Entry::parse_instance(&mut i, &bytes);
-
-                    let ty = if bytes[i+1] == b':' {
-                        i += 2;
-                        bytes[i].into()
-                    } else {
-                        continue;
-                    };
-
-                    entries.push(Entry::AnalogTriggerOutput {index, ty})
-                },
-                _ => {}
-            }
-
-            i += 1;
-        }
-
-        entries
-    }
-
-    fn parse_instance<Dst: From<u8>>(i: &mut usize, bytes: &[u8]) -> Dst {
-        assert_eq!(size_of::<Dst>(), size_of::<u8>());
-
-        *i += 1;
-        let instance = bytes[*i].into();
-        instance
-    }
+    
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

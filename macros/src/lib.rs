@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use proc_macro::TokenStream;
 use quote::{quote, TokenStreamExt};
 use proc_macro2::Span;
-use syn::{Ident, spanned::Spanned, Data, DeriveInput, LitByteStr, Meta, PathArguments};
+use syn::{Ident, ExprClosure, spanned::Spanned, Data, DeriveInput, LitByteStr, Meta, PathArguments};
 
 enum Fields {
     None,
@@ -19,6 +19,7 @@ enum Fields {
 struct Entry {
     ident: Ident,
     fields: Fields,
+    parse: Option<ExprClosure>, 
 }
 
 #[proc_macro_derive(ParseEntries, attributes(entry))]
@@ -82,7 +83,7 @@ pub fn parse_entries(input: TokenStream) -> TokenStream {
             _ => return syn::Error::new(s, "the `entry` attribute requires the entry indicator as an argument").into_compile_error().into(),
         };
 
-        let entry = Entry {ident: variant.ident, fields};
+        let entry = Entry {ident: variant.ident, fields, parse: None};
 
         let s = indicator.span();
         if let Some(_) = entries.insert(indicator, entry) {
@@ -94,25 +95,96 @@ pub fn parse_entries(input: TokenStream) -> TokenStream {
     key_pairs.sort_by(|(a, _), (b, _)| a.value().len().cmp(&b.value().len()));
 
     let mut parse = proc_macro2::TokenStream::new();
-    for (indicator, entry) in key_pairs {
+    for (i, (indicator, entry)) in key_pairs.into_iter().enumerate() {
+        let if_stmt = if i == 0 {
+            quote! { if }
+        } else {
+            quote! { else if }
+        };
+
+        // Gather the bytes of the indicator into a TokenStream array to compare
+        let mut indicator_bytes = proc_macro2::TokenStream::new();
+        for byte in indicator.value() {
+            let byte_token = quote! { #byte, };
+            indicator_bytes.extend(byte_token);
+        }
+        let indicator_array = quote!{ [#indicator_bytes] };
+
+        let entry_ident = entry.ident;
+
         let parse_block = match entry.fields {
             Fields::None => {
                 quote! {
-
+                    #if_stmt bytes[i..].starts_with(&#indicator_array) {
+                        entries.push(#ident::#entry_ident);
+                    }
                 }
             },
-            Fields::Instance { ident } => {
-                todo!()
+            Fields::Instance { ident: field_ident } => {
+                if let Some(field_ident) = field_ident {
+                    quote! {
+                        #if_stmt bytes[i..].starts_with(&#indicator_array) {
+                            let instance = match Self::parse_instance(&mut i, &bytes) {
+                                Some(instance) => instance,
+                                None => {
+                                    i += 1;
+                                    continue;
+                                }
+                            };
+
+                            let entry = #ident::#entry_ident {
+                                #field_ident: instance,
+                            };
+                            entries.push(entry);
+                        }
+                    }
+                } else {
+                    quote! {
+                        #if_stmt bytes[i..].starts_with(&#indicator_array) {
+                            let instance = match Self::parse_instance(&mut i, &bytes) {
+                                Some(instance) => instance,
+                                None => {
+                                    i += 1;
+                                    continue;
+                                }
+                            };
+
+                            let entry = #ident::#entry_ident(instance);
+                            entries.push(entry);
+                        }
+                    }
+                }
             },
-            Fields::Context { instance, context } => {
-                todo!()
+            Fields::Context { instance: instance_ident, context: context_ident } => {
+                quote! {
+                    #if_stmt bytes[i..].starts_with(&#indicator_array) {
+                        let instance = match Self::parse_instance(&mut i, &bytes) {
+                            Some(instance) => instance,
+                            None => {
+                                i += 1;
+                                continue;
+                            }
+                        };
+
+                        let context = match Self::parse_context(&mut i, &bytes) {
+                            Some(context) => context,
+                            None => {
+                                i += 1;
+                                continue;
+                            }
+                        };
+
+                        let entry = #ident::#entry_ident {
+                            #instance_ident: instance,
+                            #context_ident: context,
+                        };
+                        entries.push(entry);
+                    }
+                }
             }
         };
 
-        parse = quote! {
-            #parse
-            #parse_block
-        }
+        parse.extend(parse_block);
     }
 
     quote! {
@@ -129,6 +201,20 @@ pub fn parse_entries(input: TokenStream) -> TokenStream {
                 }
 
                 entries
+            }
+
+            fn parse_instance<Dst: From<u8>>(i: &mut usize, bytes: &[u8]) -> Option<Dst> {
+                *i += 1;
+                bytes.get(*i).map(|byte| Dst::from(*byte))
+            }
+
+            fn parse_context<Dst: From<u8>>(i: &mut usize, bytes: &[u8]) -> Option<Dst> {
+                if bytes[*i + 1] == b':' {
+                    *i += 2;
+                    bytes.get(*i).map(|byte| Dst::from(*byte))
+                } else {
+                    None
+                }
             }
         }
     }.into()
