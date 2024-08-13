@@ -26,7 +26,11 @@ fn main() -> std::io::Result<()> {
     loop {
         let sequence_bytes = sequence.to_be_bytes();
 
-        let mode = (sequence / 10) % 6;
+        let mut mode = (sequence / 10) % 6;
+
+        if (sequence / 100) % 2 == 0 {
+            mode = 0x80;
+        }
 
         udp.send(&[sequence_bytes[0], sequence_bytes[1], 0x01, mode as u8, 0x11, 0x03])?;
         std::thread::sleep(Duration::from_millis(50));
