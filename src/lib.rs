@@ -4,7 +4,15 @@ pub mod recv {
     pub mod udp;
 }
 
+pub mod send {
+    pub mod tcp;
+    pub mod udp;
+}
+
+pub mod traits;
+
 use serde::{Deserialize, Serialize};
+use traits::Bytes;
 
 const UDP_PORT: u16 = 1110;
 const TCP_PORT: u16 = 1740;
@@ -16,8 +24,10 @@ const DS_UDP_ADDR: &str = "127.0.0.1:64651";
 
 pub struct Robot {
     team: u16,
-    ctrl: Control,
-    station: Station,
+    estopped: bool,
+    enabled: bool,
+    alliance: Alliance,
+    mode: Mode,
 }
 
 impl Robot {
@@ -53,59 +63,7 @@ fn udp_thread(team_ip: String) -> std::io::Result<()> {
     Ok(())
 }
 
-#[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct Control(u8);
 
-impl Control {
-    const MODE_MASK: u8 = 0x03;
-    const ENABLE_MASK: u8 = 0x04;
-    const ESTOP_MASK: u8 = 0x80;
-
-    pub fn mode(&self) -> Mode {
-        Mode::from_bits(self.0 & Self::MODE_MASK)
-    }
-
-    pub fn set_mode(&mut self, mode: Mode) {
-        self.0 &= !Self::MODE_MASK;
-        self.0 |= mode.into_bits();
-    }
-
-    pub fn with_mode(mut self, mode: Mode) -> Self {
-        self.set_mode(mode);
-        self
-    }
-
-    pub fn enabled(&self) -> bool {
-        self.0 & Self::ENABLE_MASK > 0
-    }
-
-    pub fn set_enabled(&mut self, enabled: bool) {
-        if enabled {
-            self.0 |= Self::ENABLE_MASK;
-        } else {
-            self.0 &= !Self::ENABLE_MASK;
-        }
-    }
-
-    pub fn with_enabled(mut self, enabled: bool) -> Self {
-        self.set_enabled(enabled);
-        self
-    }
-
-    pub fn estopped(&self) -> bool {
-        self.0 & Self::ESTOP_MASK > 0
-    }
-
-    pub fn set_estopped(&mut self) {
-        self.0 |= Self::ESTOP_MASK;
-    }
-
-    pub fn with_estopped(mut self) -> Self {
-        self.set_estopped();
-        self
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -135,13 +93,28 @@ impl Mode {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Station {
+pub enum Alliance {
     Red1,
     Red2,
     Red3,
     Blue1,
     Blue2,
     Blue3,
+}
+
+impl Bytes for Alliance {
+    fn write_bytes(&self, out: &mut Vec<u8>) {
+        let byte = match self {
+            Alliance::Red1 => 0,
+            Alliance::Red2 => 1,
+            Alliance::Red3 => 2,
+            Alliance::Blue1 => 3,
+            Alliance::Blue2 => 4,
+            Alliance::Blue3 => 5,
+        };
+
+        out.push(byte);
+    }
 }
 
 /// Constructs the RoboRIO IP address from the given team number.
