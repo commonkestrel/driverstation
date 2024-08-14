@@ -1,4 +1,4 @@
-mod recv {
+pub mod recv {
     pub mod entry;
     pub mod tcp;
     pub mod udp;

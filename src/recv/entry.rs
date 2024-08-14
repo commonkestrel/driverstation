@@ -5,6 +5,7 @@ use std::{
 
 use macros::ParseEntries;
 
+#[allow(non_camel_case_types)]
 #[derive(Debug, Clone, ParseEntries)]
 pub enum Entry {
     #[entry(b"A")]
@@ -242,7 +243,6 @@ pub enum Entry {
     CTRE_future5,
     #[entry(b">S")]
     CTRE_future6,
-    
 }
 
 impl Entry {
@@ -343,7 +343,7 @@ impl From<u8> for Framework {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum DriveType {
-    ArcadeStandard,
+    ArcadeStandard = 1,
     ArcadeButtonSpin,
     ArcadeRatioCurve,
     Tank,
@@ -354,11 +354,11 @@ pub enum DriveType {
 impl From<u8> for DriveType {
     fn from(value: u8) -> Self {
         match value {
-            0 => DriveType::ArcadeStandard,
-            1 => DriveType::ArcadeButtonSpin,
-            2 => DriveType::ArcadeRatioCurve,
-            3 => DriveType::Tank,
-            4 => DriveType::MecanumPolar,
+            1 => DriveType::ArcadeStandard,
+            2 => DriveType::ArcadeButtonSpin,
+            3 => DriveType::ArcadeRatioCurve,
+            4 => DriveType::Tank,
+            55 => DriveType::MecanumPolar,
             _ => DriveType::MecanumCartesian,
         }
     }
@@ -417,5 +417,19 @@ impl From<u8> for Encoding {
             1 => Encoding::X2,
             _ => Encoding::X4,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::ffi::CStr;
+
+    use super::*;
+
+    #[test]
+    fn parse_from_string() {
+        const TEST_STRING: &CStr = c"V1K0N0Y0c0i0q0r0N1W1Y1b1i1j1o1q1C2i2i3A4>A31>O31>A32>O32>A33>O33>A34>O34>A35>O35>A36>O36f2:1S0:2";
+
+        println!("{:#?}", Entry::parse_entries(TEST_STRING.into()))
     }
 }

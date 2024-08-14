@@ -142,7 +142,7 @@ pub fn parse_entries(input: TokenStream) -> TokenStream {
     key_pairs.sort_by(|(a, _), (b, _)| a.value().len().cmp(&b.value().len()));
 
     let mut parse = proc_macro2::TokenStream::new();
-    for (i, (indicator, entry)) in key_pairs.into_iter().enumerate() {
+    for (i, (indicator, entry)) in key_pairs.into_iter().rev().enumerate() {
         let if_stmt = if i == 0 {
             quote! { if }
         } else {
@@ -159,6 +159,8 @@ pub fn parse_entries(input: TokenStream) -> TokenStream {
 
         let entry_ident = entry.ident;
 
+        let offset = indicator.value().len();
+
         let parse_block = match entry.fields {
             Fields::None => {
                 let callback = if let Some(callback) = entry.callback {
@@ -173,6 +175,7 @@ pub fn parse_entries(input: TokenStream) -> TokenStream {
 
                 quote! {
                     #if_stmt bytes[i..].starts_with(&#indicator_array) {
+                        i += #offset;
                         #callback
                     }
                 }
@@ -218,6 +221,8 @@ pub fn parse_entries(input: TokenStream) -> TokenStream {
 
                 quote! {
                     #if_stmt bytes[i..].starts_with(&#indicator_array) {
+                        i += #offset;
+
                         #get_entry
                         entries.push(entry);
                     }
@@ -259,9 +264,10 @@ pub fn parse_entries(input: TokenStream) -> TokenStream {
                     }
                 };
 
-
                 quote! {
                     #if_stmt bytes[i..].starts_with(&#indicator_array) {
+                        i += #offset;
+
                         #get_entry
                         entries.push(entry);
                     }
@@ -274,29 +280,46 @@ pub fn parse_entries(input: TokenStream) -> TokenStream {
 
     quote! {
         impl #ident {
-            fn parse_entries(source: ::std::ffi::CString) -> ::std::vec::Vec<#ident> {
+            pub fn parse_entries(source: ::std::ffi::CString) -> ::std::vec::Vec<#ident> {
                 let bytes = source.into_bytes();
 
                 let mut i = 0;
                 let mut entries = ::std::vec::Vec::new();
                 while i < bytes.len() {
-                    #parse
-
-                    i += 1;
+                    #parse else {
+                        i += 1;
+                    }
                 }
 
                 entries
             }
 
             fn parse_instance<Dst: From<u8>>(i: &mut usize, bytes: &[u8]) -> Option<Dst> {
-                *i += 1;
-                bytes.get(*i).map(|byte| Dst::from(*byte))
+                let start_i = *i;
+                let mut instance: u8 = 0;
+                while let Some(num) = bytes.get(*i).filter(|byte| (**byte as char).is_digit(10)) {
+                    // We can unwrap here since `num` is guarenteed to be a base 10 digit
+                    let digit = (*num as char).to_digit(10).unwrap();
+
+                    instance *= 10;
+                    instance += digit as u8;
+                    *i += 1;
+                }
+
+                // If `mult` is one we did not find any numbers,
+                // meaning there was no instance present
+                if start_i == *i {
+                    None
+                } else {
+                    Some(instance.into())
+                }
             }
 
             fn parse_context<Dst: From<u8>>(i: &mut usize, bytes: &[u8]) -> Option<Dst> {
-                if bytes[*i + 1] == b':' {
-                    *i += 2;
-                    bytes.get(*i).map(|byte| Dst::from(*byte))
+                if bytes[*i] == b':' {
+                    let ret = Self::parse_instance(i, bytes);
+                    *i += 1;
+                    ret
                 } else {
                     None
                 }
