@@ -104,7 +104,7 @@ pub enum Entry {
     PWM {
         channel: u8,
     },
-    #[entry(b"e")]
+    #[entry(b"e", Entry::parse_relay)]
     Relay {
         channel: u8,
         reversable: bool,
@@ -243,6 +243,21 @@ pub enum Entry {
     #[entry(b">S")]
     CTRE_future6,
     
+}
+
+impl Entry {
+    fn parse_relay(i: &mut usize, bytes: &[u8]) -> Option<Entry> {
+        let indicator = bytes.get(*i + 1)?;
+        *i += 1;
+
+        let (channel, reversable) = if *indicator > 127 {
+            (indicator - 127, true)
+        } else {
+            (*indicator, false)
+        };
+
+        Some(Entry::Relay {channel, reversable})
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

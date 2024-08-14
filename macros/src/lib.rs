@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use proc_macro::TokenStream;
-use quote::{quote, TokenStreamExt};
+use quote::{quote, ToTokens, TokenStreamExt};
 use proc_macro2::Span;
-use syn::{Ident, ExprClosure, spanned::Spanned, Data, DeriveInput, LitByteStr, Meta, PathArguments};
+use syn::{parse::Parse, punctuated::Punctuated, spanned::Spanned, Data, DeriveInput, ExprClosure, Ident, LitByteStr, Meta, Path, PathArguments, Token};
 
 enum Fields {
     None,
@@ -19,7 +19,54 @@ enum Fields {
 struct Entry {
     ident: Ident,
     fields: Fields,
-    parse: Option<ExprClosure>, 
+    callback: Option<Callback>,
+}
+
+struct Attr {
+    indicator: LitByteStr,
+    callback: Option<Callback>,
+}
+
+impl Parse for Attr {
+    fn parse(mut input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let indicator: LitByteStr = input.parse()?;
+        let callback = if input.peek(Token![,]) {
+            let _: Token![,] = input.parse()?;
+
+            if input.peek(syn::Ident) {
+                let path = Path::parse(input)?;
+                Some(Callback::Label(path))
+            } else {
+                todo!()
+            }
+        } else {
+            None
+        };
+
+        Ok(Attr {
+            indicator, callback,
+        })
+    }
+}
+
+enum Callback {
+    Label(Path),
+    Inline {
+        i_ident: Ident,
+        bytes_ident: Ident,
+        body: proc_macro2::TokenStream,
+    }
+}
+
+impl ToTokens for Callback {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        tokens.extend(match self {
+            Callback::Label(label) => quote!{ #label },
+            Callback::Inline { i_ident, bytes_ident, body } => quote! {
+                (|#i_ident, #bytes_ident| #body)
+            },
+        })
+    }
 }
 
 #[proc_macro_derive(ParseEntries, attributes(entry))]
@@ -73,20 +120,20 @@ pub fn parse_entries(input: TokenStream) -> TokenStream {
         };
 
         let s = meta.span();
-        let indicator: LitByteStr = match meta {
+        let attr: Attr = match meta {
             Meta::List(list) => {
                 match list.parse_args() {
                     Ok(indicator) => indicator,
-                    Err(_) => return syn::Error::new(list.span(), "the `entry` attribute expects a single byte literal").into_compile_error().into(),
+                    Err(_) => return syn::Error::new(list.span(), "the `entry` attribute expects a single byte literal and an optional callback").into_compile_error().into(),
                 }
             },
             _ => return syn::Error::new(s, "the `entry` attribute requires the entry indicator as an argument").into_compile_error().into(),
         };
 
-        let entry = Entry {ident: variant.ident, fields, parse: None};
+        let entry = Entry {ident: variant.ident, fields, callback: attr.callback};
 
-        let s = indicator.span();
-        if let Some(_) = entries.insert(indicator, entry) {
+        let s = attr.indicator.span();
+        if let Some(_) = entries.insert(attr.indicator, entry) {
             return syn::Error::new(s, "duplicate indicator found").into_compile_error().into();
         }
     }
@@ -114,50 +161,81 @@ pub fn parse_entries(input: TokenStream) -> TokenStream {
 
         let parse_block = match entry.fields {
             Fields::None => {
+                let callback = if let Some(callback) = entry.callback {
+                    quote! {
+                        entries.push((#callback)(&mut i, &bytes));
+                    }
+                } else {
+                    quote! {
+                        entries.push(#ident::#entry_ident);
+                    }
+                };
+
                 quote! {
                     #if_stmt bytes[i..].starts_with(&#indicator_array) {
-                        entries.push(#ident::#entry_ident);
+                        #callback
                     }
                 }
             },
             Fields::Instance { ident: field_ident } => {
-                if let Some(field_ident) = field_ident {
+                let get_entry = if let Some(callback) = entry.callback {
                     quote! {
-                        #if_stmt bytes[i..].starts_with(&#indicator_array) {
-                            let instance = match Self::parse_instance(&mut i, &bytes) {
-                                Some(instance) => instance,
-                                None => {
-                                    i += 1;
-                                    continue;
-                                }
-                            };
+                        let entry = match #callback(&mut i, &bytes) {
+                            Some(entry) => entry,
+                            None => {
+                                i += 1;
+                                continue;
+                            }
+                        };
+                    }
+                } else if let Some(field_ident) = field_ident {
+                    quote! {
+                        let instance = match Self::parse_instance(&mut i, &bytes) {
+                            Some(instance) => instance,
+                            None => {
+                                i += 1;
+                                continue;
+                            }
+                        };
 
-                            let entry = #ident::#entry_ident {
-                                #field_ident: instance,
-                            };
-                            entries.push(entry);
-                        }
+                        let entry = #ident::#entry_ident {
+                            #field_ident: instance,
+                        };
                     }
                 } else {
                     quote! {
-                        #if_stmt bytes[i..].starts_with(&#indicator_array) {
-                            let instance = match Self::parse_instance(&mut i, &bytes) {
-                                Some(instance) => instance,
-                                None => {
-                                    i += 1;
-                                    continue;
-                                }
-                            };
+                        let instance = match Self::parse_instance(&mut i, &bytes) {
+                            Some(instance) => instance,
+                            None => {
+                                i += 1;
+                                continue;
+                            }
+                        };
 
-                            let entry = #ident::#entry_ident(instance);
-                            entries.push(entry);
-                        }
+                        let entry = #ident::#entry_ident(instance);
+                    }
+                };
+
+                quote! {
+                    #if_stmt bytes[i..].starts_with(&#indicator_array) {
+                        #get_entry
+                        entries.push(entry);
                     }
                 }
             },
             Fields::Context { instance: instance_ident, context: context_ident } => {
-                quote! {
-                    #if_stmt bytes[i..].starts_with(&#indicator_array) {
+                let get_entry = if let Some(callback) = entry.callback {
+                    quote! {
+                        let entry = match #callback(&mut i, &bytes) {
+                            Some(entry) => entry,
+                            None => {
+                                i += 1;
+                                continue;
+                            }
+                        };
+                    }
+                } else {
+                    quote! {
                         let instance = match Self::parse_instance(&mut i, &bytes) {
                             Some(instance) => instance,
                             None => {
@@ -178,6 +256,13 @@ pub fn parse_entries(input: TokenStream) -> TokenStream {
                             #instance_ident: instance,
                             #context_ident: context,
                         };
+                    }
+                };
+
+
+                quote! {
+                    #if_stmt bytes[i..].starts_with(&#indicator_array) {
+                        #get_entry
                         entries.push(entry);
                     }
                 }
