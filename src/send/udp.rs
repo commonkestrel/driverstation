@@ -11,6 +11,76 @@ pub struct Packet {
     tags: Vec<Tag>,
 }
 
+impl Packet {
+    pub fn with_sequence(mut self, sequence: u16) -> Self {
+        self.sequence = sequence;
+        self
+    }
+
+    pub fn with_enabled(mut self, enabled: bool) -> Self {
+        self.ctrl.set_enabled(enabled);
+        self
+    }
+
+    pub fn with_estopped(mut self, enabled: bool) -> Self {
+        self.ctrl.set_estopped(enabled);
+        self
+    }
+
+    pub fn with_fms_connected(mut self, fms_connected: bool) -> Self {
+        self.ctrl.set_fms_connected(fms_connected);
+        self
+    }
+
+    pub fn with_mode(mut self, mode: Mode) -> Self {
+        self.ctrl.set_mode(mode);
+        self
+    }
+
+    pub fn with_reboot_roborio(mut self, reboot_roborio: bool) -> Self {
+        self.req.set_reboot_roborio(reboot_roborio);
+        self
+    }
+
+    pub fn with_restart_code(mut self, restart_code: bool) -> Self {
+        self.req.set_restart_code(restart_code);
+        self
+    }
+
+    pub fn with_alliance(mut self, alliance: Alliance) -> Self {
+        self.alliance = alliance;
+        self
+    }
+
+    pub fn with_tag(mut self, tag: Tag) -> Self {
+        self.tags.push(tag);
+        self
+    }
+
+    pub fn with_tags(mut self, tags: Vec<Tag>) -> Self {
+        self.tags = tags;
+        self
+    }
+
+    pub fn extend_tags(mut self, mut tags: Vec<Tag>) -> Self {
+        self.tags.append(&mut tags);
+        self
+    }
+}
+
+impl Default for Packet {
+    fn default() -> Self {
+        Packet {
+            sequence: 0,
+            version: 0x01,
+            ctrl: Control::default(),
+            req: Request::default(),
+            alliance: Alliance::Red1,
+            tags: Vec::new(),
+        }
+    }
+}
+
 impl Bytes for Packet {
     fn write_bytes(&self, out: &mut Vec<u8>) {
         out.extend_from_slice(&self.sequence.to_be_bytes());
@@ -106,11 +176,62 @@ impl Control {
     }
 }
 
-pub struct Request(u8);
+impl Default for Control {
+    fn default() -> Self {
+        Control(0)
+    }
+}
+
+struct Request(u8);
+
+impl Request {
+    const REBOOT_ROBORIO_MASK: u8 = 0x08;
+    const RESTART_CODE_MASK: u8 = 0x04;
+
+    pub fn reboot_roborio(&self) -> bool {
+        self.0 & Self::REBOOT_ROBORIO_MASK > 0
+    }
+
+    pub fn set_reboot_roborio(&mut self, reboot_roborio: bool) {
+        if reboot_roborio {
+            self.0 |= Self::REBOOT_ROBORIO_MASK;
+        } else {
+            self.0 &= !Self::REBOOT_ROBORIO_MASK;
+        }
+    }
+
+    pub fn with_reboot_roborio(mut self, reboot_roborio: bool) -> Self {
+        self.set_reboot_roborio(reboot_roborio);
+        self
+    }
+
+    pub fn restart_code(&self) -> bool {
+        self.0 & Self::RESTART_CODE_MASK > 0
+    }
+
+    pub fn set_restart_code(&mut self, restart_code: bool) {
+        if restart_code {
+            self.0 |= Self::RESTART_CODE_MASK;
+        } else {
+            self.0 &= !Self::RESTART_CODE_MASK;
+        }
+    }
+
+    pub fn with_restart_code(mut self, restart_code: bool) -> Self {
+        self.set_restart_code(restart_code);
+        self
+    }
+}
 
 impl Bytes for Request {
     fn write_bytes(&self, out: &mut Vec<u8>) {
         out.push(self.0);
+    }
+}
+
+impl Default for Request {
+    fn default() -> Self {
+        Request(0)
     }
 }
 

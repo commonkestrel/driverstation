@@ -6,7 +6,7 @@ use std::{
 use macros::ParseEntries;
 
 #[allow(non_camel_case_types)]
-#[derive(Debug, Clone, ParseEntries)]
+#[derive(Debug, Clone, PartialEq, Eq, ParseEntries)]
 pub enum Entry {
     #[entry(b"A")]
     Controller,
@@ -429,7 +429,105 @@ mod tests {
     #[test]
     fn parse_from_string() {
         const TEST_STRING: &CStr = c"V1K0N0Y0c0i0q0r0N1W1Y1b1i1j1o1q1C2i2i3A4>A31>O31>A32>O32>A33>O33>A34>O34>A35>O35>A36>O36f2:1S0:2";
+        let parsed = Entry::parse_entries(TEST_STRING.into());
 
-        println!("{:#?}", Entry::parse_entries(TEST_STRING.into()))
+        assert_eq!(parsed, [
+            Entry::I2C {
+                address: 1,
+            },
+            Entry::Compressor {
+                pcm_id: 0,
+            },
+            Entry::DigitalInput {
+                channel: 0,
+            },
+            Entry::Joystick {
+                port: 0,
+            },
+            Entry::Preferences,
+            Entry::Solenoid {
+                channel: 0,
+            },
+            Entry::PCVideoServer {
+                handle: 0,
+            },
+            Entry::SmartDashboard,
+            Entry::DigitalInput {
+                channel: 1,
+            },
+            Entry::Framework(
+                Framework::Iterative,
+            ),
+            Entry::Joystick {
+                port: 1,
+            },
+            Entry::PIDController {
+                instance: 1,
+            },
+            Entry::Solenoid {
+                channel: 1,
+            },
+            Entry::SPI {
+                instance: 1,
+            },
+            Entry::Command,
+            Entry::PCVideoServer {
+                handle: 1,
+            },
+            Entry::Language(
+                Language::Cpp,
+            ),
+            Entry::Solenoid {
+                channel: 2,
+            },
+            Entry::Solenoid {
+                channel: 3,
+            },
+            Entry::Controller,
+            Entry::CANTalonSRX {
+                channel: 31,
+            },
+            Entry::CTRE_future2 {
+                id: 31,
+            },
+            Entry::CANTalonSRX {
+                channel: 32,
+            },
+            Entry::CTRE_future2 {
+                id: 32,
+            },
+            Entry::CANTalonSRX {
+                channel: 33,
+            },
+            Entry::CTRE_future2 {
+                id: 33,
+            },
+            Entry::CANTalonSRX {
+                channel: 34,
+            },
+            Entry::CTRE_future2 {
+                id: 34,
+            },
+            Entry::CANTalonSRX {
+                channel: 35,
+            },
+            Entry::CTRE_future2 {
+                id: 35,
+            },
+            Entry::CANTalonSRX {
+                channel: 36,
+            },
+            Entry::CTRE_future2 {
+                id: 36,
+            },
+            Entry::RobotDrive {
+                motors: 2,
+                ty: DriveType::ArcadeStandard
+            },
+            Entry::Encoder {
+                fpga_index: 0,
+                encoding: Encoding::X4,
+            }
+        ]);
     }
 }

@@ -317,8 +317,8 @@ pub fn parse_entries(input: TokenStream) -> TokenStream {
 
             fn parse_context<Dst: From<u8>>(i: &mut usize, bytes: &[u8]) -> Option<Dst> {
                 if bytes[*i] == b':' {
-                    let ret = Self::parse_instance(i, bytes);
                     *i += 1;
+                    let ret = Self::parse_instance(i, bytes);
                     ret
                 } else {
                     None
