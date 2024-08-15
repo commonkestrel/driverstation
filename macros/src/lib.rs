@@ -1,19 +1,17 @@
 use std::collections::HashMap;
 
 use proc_macro::TokenStream;
-use quote::{quote, ToTokens, TokenStreamExt};
 use proc_macro2::Span;
-use syn::{parse::Parse, punctuated::Punctuated, spanned::Spanned, Data, DeriveInput, ExprClosure, Ident, LitByteStr, Meta, Path, PathArguments, Token};
+use quote::{quote, ToTokens, TokenStreamExt};
+use syn::{
+    parse::Parse, punctuated::Punctuated, spanned::Spanned, Data, DeriveInput, ExprClosure, Ident,
+    LitByteStr, Meta, Path, PathArguments, Token,
+};
 
 enum Fields {
     None,
-    Instance {
-        ident: Option<Ident>,
-    },
-    Context {
-        instance: Ident,
-        context: Ident,
-    },
+    Instance { ident: Option<Ident> },
+    Context { instance: Ident, context: Ident },
 }
 
 struct Entry {
@@ -44,7 +42,8 @@ impl Parse for Attr {
         };
 
         Ok(Attr {
-            indicator, callback,
+            indicator,
+            callback,
         })
     }
 }
@@ -55,14 +54,18 @@ enum Callback {
         i_ident: Ident,
         bytes_ident: Ident,
         body: proc_macro2::TokenStream,
-    }
+    },
 }
 
 impl ToTokens for Callback {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         tokens.extend(match self {
-            Callback::Label(label) => quote!{ #label },
-            Callback::Inline { i_ident, bytes_ident, body } => quote! {
+            Callback::Label(label) => quote! { #label },
+            Callback::Inline {
+                i_ident,
+                bytes_ident,
+                body,
+            } => quote! {
                 (|#i_ident, #bytes_ident| #body)
             },
         })
@@ -76,7 +79,14 @@ pub fn parse_entries(input: TokenStream) -> TokenStream {
 
     let data = match input.data {
         Data::Enum(data) => data,
-        _ => return syn::Error::new(Span::call_site(), "ParseEntries may only be used on an enum").into_compile_error().into(),
+        _ => {
+            return syn::Error::new(
+                Span::call_site(),
+                "ParseEntries may only be used on an enum",
+            )
+            .into_compile_error()
+            .into()
+        }
     };
 
     let mut entries: HashMap<LitByteStr, Entry> = HashMap::new();
@@ -93,18 +103,32 @@ pub fn parse_entries(input: TokenStream) -> TokenStream {
 
                 let instance = match instance_field.ident {
                     Some(ident) => ident,
-                    None => return syn::Error::new(instance_field.span(), "dual-field entries must have named fields").into_compile_error().into(),
+                    None => {
+                        return syn::Error::new(
+                            instance_field.span(),
+                            "dual-field entries must have named fields",
+                        )
+                        .into_compile_error()
+                        .into()
+                    }
                 };
 
                 let context_field = fields.next().unwrap();
 
                 let context = match context_field.ident {
                     Some(ident) => ident,
-                    None => return syn::Error::new(context_field.span(), "dual-field entries must have named fields").into_compile_error().into(),
+                    None => {
+                        return syn::Error::new(
+                            context_field.span(),
+                            "dual-field entries must have named fields",
+                        )
+                        .into_compile_error()
+                        .into()
+                    }
                 };
 
-                Fields::Context {instance, context}
-            },
+                Fields::Context { instance, context }
+            }
         };
 
         let meta = match variant.attrs.into_iter().find_map(|attr| {
@@ -121,20 +145,36 @@ pub fn parse_entries(input: TokenStream) -> TokenStream {
 
         let s = meta.span();
         let attr: Attr = match meta {
-            Meta::List(list) => {
-                match list.parse_args() {
-                    Ok(indicator) => indicator,
-                    Err(_) => return syn::Error::new(list.span(), "the `entry` attribute expects a single byte literal and an optional callback").into_compile_error().into(),
-                }
+            Meta::List(list) => match list.parse_args() {
+                Ok(indicator) => indicator,
+                Err(_) => return syn::Error::new(
+                    list.span(),
+                    "the `entry` attribute expects a single byte literal and an optional callback",
+                )
+                .into_compile_error()
+                .into(),
             },
-            _ => return syn::Error::new(s, "the `entry` attribute requires the entry indicator as an argument").into_compile_error().into(),
+            _ => {
+                return syn::Error::new(
+                    s,
+                    "the `entry` attribute requires the entry indicator as an argument",
+                )
+                .into_compile_error()
+                .into()
+            }
         };
 
-        let entry = Entry {ident: variant.ident, fields, callback: attr.callback};
+        let entry = Entry {
+            ident: variant.ident,
+            fields,
+            callback: attr.callback,
+        };
 
         let s = attr.indicator.span();
         if let Some(_) = entries.insert(attr.indicator, entry) {
-            return syn::Error::new(s, "duplicate indicator found").into_compile_error().into();
+            return syn::Error::new(s, "duplicate indicator found")
+                .into_compile_error()
+                .into();
         }
     }
 
@@ -155,7 +195,7 @@ pub fn parse_entries(input: TokenStream) -> TokenStream {
             let byte_token = quote! { #byte, };
             indicator_bytes.extend(byte_token);
         }
-        let indicator_array = quote!{ [#indicator_bytes] };
+        let indicator_array = quote! { [#indicator_bytes] };
 
         let entry_ident = entry.ident;
 
@@ -179,7 +219,7 @@ pub fn parse_entries(input: TokenStream) -> TokenStream {
                         #callback
                     }
                 }
-            },
+            }
             Fields::Instance { ident: field_ident } => {
                 let get_entry = if let Some(callback) = entry.callback {
                     quote! {
@@ -227,8 +267,11 @@ pub fn parse_entries(input: TokenStream) -> TokenStream {
                         entries.push(entry);
                     }
                 }
-            },
-            Fields::Context { instance: instance_ident, context: context_ident } => {
+            }
+            Fields::Context {
+                instance: instance_ident,
+                context: context_ident,
+            } => {
                 let get_entry = if let Some(callback) = entry.callback {
                     quote! {
                         let entry = match #callback(&mut i, &bytes) {
@@ -325,5 +368,6 @@ pub fn parse_entries(input: TokenStream) -> TokenStream {
                 }
             }
         }
-    }.into()
+    }
+    .into()
 }

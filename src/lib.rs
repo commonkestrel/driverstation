@@ -63,8 +63,6 @@ fn udp_thread(team_ip: String) -> std::io::Result<()> {
     Ok(())
 }
 
-
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Mode {

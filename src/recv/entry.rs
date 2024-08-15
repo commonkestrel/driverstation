@@ -17,45 +17,27 @@ pub enum Entry {
     #[entry(b"D")]
     CANPlugin,
     #[entry(b"E")]
-    Accelerometer {
-        channel: u8,
-    },
+    Accelerometer { channel: u8 },
     #[entry(b"F")]
     ADXL345(ADXL345),
     #[entry(b"G")]
-    AnalogChannel {
-        channel: u8,
-    },
+    AnalogChannel { channel: u8 },
     #[entry(b"H")]
-    AnalogTrigger {
-        channel: u8,
-    },
+    AnalogTrigger { channel: u8 },
     #[entry(b"I")]
-    AnalogTriggerOutput {
-        index: u8,
-        ty: Trigger,
-    },
+    AnalogTriggerOutput { index: u8, ty: Trigger },
     #[entry(b"J")]
     CANJaguar,
     #[entry(b"K")]
-    Compressor {
-        pcm_id: u8,
-    },
+    Compressor { pcm_id: u8 },
     #[entry(b"L")]
-    Counter {
-        index: u8,
-        mode: CounterMode,
-    },
+    Counter { index: u8, mode: CounterMode },
     #[entry(b"M")]
     Dashboard,
     #[entry(b"N")]
-    DigitalInput {
-        channel: u8,
-    },
+    DigitalInput { channel: u8 },
     #[entry(b"O")]
-    DigitalOutput {
-        channel: u8,
-    },
+    DigitalOutput { channel: u8 },
     #[entry(b"P")]
     DriverStationCIO,
     #[entry(b"Q")]
@@ -63,32 +45,19 @@ pub enum Entry {
     #[entry(b"R")]
     DriverStationLCD,
     #[entry(b"S")]
-    Encoder {
-        fpga_index: u8,
-        encoding: Encoding,
-    },
+    Encoder { fpga_index: u8, encoding: Encoding },
     #[entry(b"T")]
-    GearTooth {
-        channel: u8,
-    },
+    GearTooth { channel: u8 },
     #[entry(b"U")]
-    Gyro {
-        channel: u8,
-    },
+    Gyro { channel: u8 },
     #[entry(b"V")]
-    I2C {
-        address: u8,
-    },
+    I2C { address: u8 },
     #[entry(b"W")]
     Framework(Framework),
     #[entry(b"X")]
-    Jaguar {
-        channel: u8,
-    },
+    Jaguar { channel: u8 },
     #[entry(b"Y")]
-    Joystick {
-        port: u8,
-    },
+    Joystick { port: u8 },
     #[entry(b"Z")]
     Kinect,
     #[entry(b"a")]
@@ -102,29 +71,17 @@ pub enum Entry {
     #[entry(b"c")]
     Preferences,
     #[entry(b"d")]
-    PWM {
-        channel: u8,
-    },
+    PWM { channel: u8 },
     #[entry(b"e", Entry::parse_relay)]
-    Relay {
-        channel: u8,
-        reversable: bool,
-    },
+    Relay { channel: u8, reversable: bool },
     #[entry(b"f")]
-    RobotDrive {
-        motors: u8,
-        ty: DriveType,
-    },
+    RobotDrive { motors: u8, ty: DriveType },
     #[entry(b"g")]
     SerialPort,
     #[entry(b"h")]
-    Servo {
-        channel: u8,
-    },
+    Servo { channel: u8 },
     #[entry(b"i")]
-    Solenoid {
-        channel: u8,
-    },
+    Solenoid { channel: u8 },
     #[entry(b"j")]
     SPI {
         /// The instance number.
@@ -134,31 +91,21 @@ pub enum Entry {
     #[entry(b"k")]
     Task,
     #[entry(b"l")]
-    Ultrasonic {
-        channel: u8,
-    },
+    Ultrasonic { channel: u8 },
     #[entry(b"m")]
-    Victor {
-        channel: u8,
-    },
+    Victor { channel: u8 },
     #[entry(b"n")]
     Button,
     #[entry(b"o")]
     Command,
     #[entry(b"p")]
-    AxisCamera {
-        handle: u8,
-    },
+    AxisCamera { handle: u8 },
     #[entry(b"q")]
-    PCVideoServer {
-        handle: u8,
-    },
+    PCVideoServer { handle: u8 },
     #[entry(b"r")]
     SmartDashboard,
     #[entry(b"s")]
-    Talon {
-        channel: u8,
-    },
+    Talon { channel: u8 },
     #[entry(b"t")]
     HiTechnicColorSensor,
     #[entry(b"u")]
@@ -166,43 +113,25 @@ pub enum Entry {
     #[entry(b"v")]
     HiTechnicCompass,
     #[entry(b"w")]
-    SRF08 {
-        channel: u8,
-    },
+    SRF08 { channel: u8 },
     #[entry(b"x")]
     AnalogOutput,
     #[entry(b"y")]
-    VictorSP {
-        channel: u8,
-    },
+    VictorSP { channel: u8 },
     #[entry(b"z")]
-    PWMTalonSRC {
-        channel: u8,
-    },
+    PWMTalonSRC { channel: u8 },
     #[entry(b">A")]
-    CANTalonSRX {
-        channel: u8,
-    },
+    CANTalonSRX { channel: u8 },
     #[entry(b">B")]
-    ADXL362 {
-        port: SPIPort,
-    },
+    ADXL362 { port: SPIPort },
     #[entry(b">C")]
-    ADXRS450 {
-        port: SPIPort,
-    },
+    ADXRS450 { port: SPIPort },
     #[entry(b">D")]
-    RevSPARK {
-        channel: u8,
-    },
+    RevSPARK { channel: u8 },
     #[entry(b">E")]
-    MindsensorsSD540 {
-        channel: u8,
-    },
+    MindsensorsSD540 { channel: u8 },
     #[entry(b">F")]
-    DigitalFilter {
-        channel: u8,
-    },
+    DigitalFilter { channel: u8 },
     #[entry(b">G")]
     ADIS16448,
     #[entry(b">H")]
@@ -210,33 +139,19 @@ pub enum Entry {
     #[entry(b">I")]
     PCM,
     #[entry(b">J")]
-    PigeonIMU {
-        id: u8,
-    },
+    PigeonIMU { id: u8 },
     #[entry(b">K")]
-    NidecBrushless {
-        channel: u8,
-    },
+    NidecBrushless { channel: u8 },
     #[entry(b">L")]
-    CANifier {
-        id: u8,
-    },
+    CANifier { id: u8 },
     #[entry(b">M")]
-    CTRE_future0 {
-        id: u8,
-    },
+    CTRE_future0 { id: u8 },
     #[entry(b">N")]
-    CTRE_future1 {
-        id: u8,
-    },
+    CTRE_future1 { id: u8 },
     #[entry(b">O")]
-    CTRE_future2 {
-        id: u8,
-    },
+    CTRE_future2 { id: u8 },
     #[entry(b">P")]
-    CTRE_future3 {
-        id: u8,
-    },
+    CTRE_future3 { id: u8 },
     #[entry(b">Q")]
     CTRE_future4,
     #[entry(b">R")]
@@ -256,7 +171,10 @@ impl Entry {
             (*indicator, false)
         };
 
-        Some(Entry::Relay {channel, reversable})
+        Some(Entry::Relay {
+            channel,
+            reversable,
+        })
     }
 }
 
@@ -431,103 +349,50 @@ mod tests {
         const TEST_STRING: &CStr = c"V1K0N0Y0c0i0q0r0N1W1Y1b1i1j1o1q1C2i2i3A4>A31>O31>A32>O32>A33>O33>A34>O34>A35>O35>A36>O36f2:1S0:2";
         let parsed = Entry::parse_entries(TEST_STRING.into());
 
-        assert_eq!(parsed, [
-            Entry::I2C {
-                address: 1,
-            },
-            Entry::Compressor {
-                pcm_id: 0,
-            },
-            Entry::DigitalInput {
-                channel: 0,
-            },
-            Entry::Joystick {
-                port: 0,
-            },
-            Entry::Preferences,
-            Entry::Solenoid {
-                channel: 0,
-            },
-            Entry::PCVideoServer {
-                handle: 0,
-            },
-            Entry::SmartDashboard,
-            Entry::DigitalInput {
-                channel: 1,
-            },
-            Entry::Framework(
-                Framework::Iterative,
-            ),
-            Entry::Joystick {
-                port: 1,
-            },
-            Entry::PIDController {
-                instance: 1,
-            },
-            Entry::Solenoid {
-                channel: 1,
-            },
-            Entry::SPI {
-                instance: 1,
-            },
-            Entry::Command,
-            Entry::PCVideoServer {
-                handle: 1,
-            },
-            Entry::Language(
-                Language::Cpp,
-            ),
-            Entry::Solenoid {
-                channel: 2,
-            },
-            Entry::Solenoid {
-                channel: 3,
-            },
-            Entry::Controller,
-            Entry::CANTalonSRX {
-                channel: 31,
-            },
-            Entry::CTRE_future2 {
-                id: 31,
-            },
-            Entry::CANTalonSRX {
-                channel: 32,
-            },
-            Entry::CTRE_future2 {
-                id: 32,
-            },
-            Entry::CANTalonSRX {
-                channel: 33,
-            },
-            Entry::CTRE_future2 {
-                id: 33,
-            },
-            Entry::CANTalonSRX {
-                channel: 34,
-            },
-            Entry::CTRE_future2 {
-                id: 34,
-            },
-            Entry::CANTalonSRX {
-                channel: 35,
-            },
-            Entry::CTRE_future2 {
-                id: 35,
-            },
-            Entry::CANTalonSRX {
-                channel: 36,
-            },
-            Entry::CTRE_future2 {
-                id: 36,
-            },
-            Entry::RobotDrive {
-                motors: 2,
-                ty: DriveType::ArcadeStandard
-            },
-            Entry::Encoder {
-                fpga_index: 0,
-                encoding: Encoding::X4,
-            }
-        ]);
+        assert_eq!(
+            parsed,
+            [
+                Entry::I2C { address: 1 },
+                Entry::Compressor { pcm_id: 0 },
+                Entry::DigitalInput { channel: 0 },
+                Entry::Joystick { port: 0 },
+                Entry::Preferences,
+                Entry::Solenoid { channel: 0 },
+                Entry::PCVideoServer { handle: 0 },
+                Entry::SmartDashboard,
+                Entry::DigitalInput { channel: 1 },
+                Entry::Framework(Framework::Iterative,),
+                Entry::Joystick { port: 1 },
+                Entry::PIDController { instance: 1 },
+                Entry::Solenoid { channel: 1 },
+                Entry::SPI { instance: 1 },
+                Entry::Command,
+                Entry::PCVideoServer { handle: 1 },
+                Entry::Language(Language::Cpp,),
+                Entry::Solenoid { channel: 2 },
+                Entry::Solenoid { channel: 3 },
+                Entry::Controller,
+                Entry::CANTalonSRX { channel: 31 },
+                Entry::CTRE_future2 { id: 31 },
+                Entry::CANTalonSRX { channel: 32 },
+                Entry::CTRE_future2 { id: 32 },
+                Entry::CANTalonSRX { channel: 33 },
+                Entry::CTRE_future2 { id: 33 },
+                Entry::CANTalonSRX { channel: 34 },
+                Entry::CTRE_future2 { id: 34 },
+                Entry::CANTalonSRX { channel: 35 },
+                Entry::CTRE_future2 { id: 35 },
+                Entry::CANTalonSRX { channel: 36 },
+                Entry::CTRE_future2 { id: 36 },
+                Entry::RobotDrive {
+                    motors: 2,
+                    ty: DriveType::ArcadeStandard
+                },
+                Entry::Encoder {
+                    fpga_index: 0,
+                    encoding: Encoding::X4,
+                }
+            ]
+        );
     }
 }

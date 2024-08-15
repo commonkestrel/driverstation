@@ -261,7 +261,11 @@ impl Bytes for Tag {
     fn write_bytes(&self, out: &mut Vec<u8>) {
         match self {
             Tag::Countdown(count) => out.extend(count.to_be_bytes()),
-            Tag::Joystick { axes, buttons, povs } => {
+            Tag::Joystick {
+                axes,
+                buttons,
+                povs,
+            } => {
                 out.push(axes.len() as u8);
                 let unsigned_axes = axes
                     .iter()
@@ -273,14 +277,19 @@ impl Bytes for Tag {
                 buttons.write_bytes(out);
 
                 out.push(povs.len() as u8);
-                let pov_bytes = povs
-                    .iter()
-                    .map(|pov| pov.to_be_bytes())
-                    .flatten();
+                let pov_bytes = povs.iter().map(|pov| pov.to_be_bytes()).flatten();
 
                 out.extend(pov_bytes);
-            },
-            Tag::Date { microseconds, second, minute, hour, day, month, year } => {
+            }
+            Tag::Date {
+                microseconds,
+                second,
+                minute,
+                hour,
+                day,
+                month,
+                year,
+            } => {
                 out.extend_from_slice(&microseconds.to_be_bytes());
                 out.push(*second);
                 out.push(*minute);
@@ -302,10 +311,7 @@ pub struct Buttons {
 
 impl Buttons {
     pub fn new(count: u8) -> Buttons {
-        Buttons {
-            count,
-            inner: 0,
-        }
+        Buttons { count, inner: 0 }
     }
 
     pub fn len(&self) -> u8 {
@@ -313,9 +319,9 @@ impl Buttons {
     }
 
     /// Sets the `n`th button to the given `state`.
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// This function will panic if `n` is greater than the `count` given when calling [`Buttons::new`].
     pub fn set_button(&mut self, n: u8, state: bool) {
         if state {
