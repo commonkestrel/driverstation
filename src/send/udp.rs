@@ -94,6 +94,18 @@ impl Bytes for Packet {
     }
 }
 
+pub enum UdpEvent {
+    Enabled(bool),
+    Estopped(bool),
+    FmsConnected(bool),
+    Mode(Mode),
+    RebootRoborio(bool),
+    RestartCode(bool),
+    Alliance(Alliance),
+    Tag(Tag),
+    Exit,
+}
+
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct Control(u8);

@@ -1,6 +1,6 @@
 use std::ffi::CString;
 
-use crate::traits::Bytes;
+use crate::{traits::Bytes, GameData};
 
 pub struct Packet {
     game_data: Option<GameData>,
@@ -66,33 +66,12 @@ impl Default for Packet {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct GameData {
-    chars: [Option<u8>; 3],
-}
-
-impl GameData {
-    fn len(&self) -> u8 {
-        match self.chars {
-            [Some(_), Some(_), Some(_)] => 3,
-            [Some(_), Some(_), _] => 2,
-            [Some(_), _, _] => 1,
-            _ => 0,
-        }
-    }
-}
-
-impl Bytes for GameData {
-    fn write_bytes(&self, out: &mut Vec<u8>) {
-        match self.chars {
-            [Some(first), Some(second), Some(third)] => {
-                out.extend_from_slice(&[first, second, third])
-            }
-            [Some(first), Some(second), _] => out.extend_from_slice(&[first, second]),
-            [Some(first), _, _] => out.push(first),
-            _ => {}
-        }
-    }
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum TcpEvent {
+    GameData(GameData),
+    MatchInfo(MatchInfo),
+    Joystick(Joystick),
+    Exit,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -102,6 +81,13 @@ pub struct MatchInfo {
 }
 
 impl MatchInfo {
+    pub fn new(competition: Option<CString>, ty: MatchType) -> Self {
+        MatchInfo {
+            competition,
+            ty,
+        }
+    }
+
     fn len(&self) -> u8 {
         let competition_len = match self.competition {
             Some(ref competition) => competition.as_bytes().len(),

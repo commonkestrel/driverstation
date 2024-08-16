@@ -11,9 +11,12 @@ pub mod send {
 
 pub mod traits;
 
+use send::tcp::{MatchInfo, MatchType, TcpEvent};
+use send::udp::UdpEvent;
 use serde::{Deserialize, Serialize};
 use std::net::{SocketAddr, TcpStream, UdpSocket};
-use std::time::Duration;
+use std::sync::mpsc::{channel, Receiver, SendError, Sender};
+use std::time::{Duration, Instant};
 use std::io::Write;
 use traits::Bytes;
 
@@ -31,24 +34,32 @@ pub struct Robot {
     enabled: bool,
     alliance: Alliance,
     mode: Mode,
+    game_data: GameData,
+    tcp_tx: Sender<TcpEvent>,
+    udp_tx: Sender<UdpEvent>,
 }
 
 impl Robot {
-    pub fn new(team_number: u16) -> Robot {
+    pub fn new(team_number: u16) -> Self {
         let team_ip = ip_from_team(team_number);
         let cloned_team_ip = team_ip.clone();
 
+        let (tcp_tx, tcp_rx) = channel();
         std::thread::spawn(move || {
-            if let Err(err) = tcp_thread(cloned_team_ip) {
+            if let Err(err) = tcp_thread(cloned_team_ip, tcp_rx) {
                 todo!()
             }
         });
 
+        let (udp_tx, udp_rx) = channel();
         std::thread::spawn(move || {
-            if let Err(err) = udp_thread(team_ip) {
+            if let Err(err) = udp_thread(team_ip, udp_rx) {
                 todo!()
             }
         });
+
+        tcp_tx.send(TcpEvent::GameData(GameData::empty())).unwrap();
+        tcp_tx.send(TcpEvent::MatchInfo(MatchInfo::new(None, MatchType::None))).unwrap();
 
         Robot {
             team: team_number,
@@ -56,15 +67,28 @@ impl Robot {
             enabled: false,
             alliance: Alliance::Red1,
             mode: Mode::Teleoperated,
+            game_data: GameData::default(),
+            tcp_tx,
+            udp_tx,
         }
+    }
+
+    pub fn queue_tcp(&mut self, ev: TcpEvent) {
+        self.tcp_tx.send(ev).unwrap();
+    }
+
+    pub fn queue_udp(&mut self, ev: UdpEvent) {
+        self.udp_tx.send(ev).unwrap();
     }
 }
 
-fn tcp_thread(team_ip: [u8; 4]) -> std::io::Result<()> {
-    loop {
-        let team_addr = SocketAddr::from((team_ip, TCP_PORT));
-        let sim_addr = SocketAddr::from((SIM_IP, TCP_PORT));
+fn tcp_thread(team_ip: [u8; 4], rx: Receiver<TcpEvent>) -> std::io::Result<()> {
+    let mut team_addr = SocketAddr::from((team_ip, TCP_PORT));
+    let sim_addr = SocketAddr::from((SIM_IP, TCP_PORT));
 
+
+
+    'search: loop {
         let conn = match TcpStream::connect_timeout(&team_addr, Duration::from_millis(100))
             .or_else(|_| TcpStream::connect_timeout(&sim_addr, Duration::from_millis(100)))
         {
@@ -76,12 +100,14 @@ fn tcp_thread(team_ip: [u8; 4]) -> std::io::Result<()> {
         };
 
         loop {
-            
+            let start = Instant::now();
+
+            std::thread::sleep(Duration::from_secs(1))
         }
     }
 }
 
-fn udp_thread(team_ip: [u8; 4]) -> std::io::Result<()> {
+fn udp_thread(team_ip: [u8; 4], rx: Receiver<UdpEvent>) -> std::io::Result<()> {
     loop {}
 
     Ok(())
@@ -136,6 +162,67 @@ impl Bytes for Alliance {
         };
 
         out.push(byte);
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct GameData {
+    chars: [Option<u8>; 3],
+}
+
+impl GameData {
+    pub fn empty() -> Self {
+        GameData {
+            chars: [None; 3],
+        }
+    }
+
+    pub fn single(character: u8) -> Self {
+        GameData {
+            chars: [Some(character), None, None]
+        }
+    }
+
+    pub fn double(first: u8, second: u8) -> Self {
+        GameData {
+            chars: [Some(first), Some(second), None]
+        }
+    }
+
+    pub fn triple(first: u8, second: u8, third: u8) -> Self {
+        GameData {
+            chars: [Some(first), Some(second), Some(third)]
+        }
+    }
+
+    fn len(&self) -> u8 {
+        match self.chars {
+            [Some(_), Some(_), Some(_)] => 3,
+            [Some(_), Some(_), _] => 2,
+            [Some(_), _, _] => 1,
+            _ => 0,
+        }
+    }
+}
+
+impl Bytes for GameData {
+    fn write_bytes(&self, out: &mut Vec<u8>) {
+        match self.chars {
+            [Some(first), Some(second), Some(third)] => {
+                out.extend_from_slice(&[first, second, third])
+            }
+            [Some(first), Some(second), _] => out.extend_from_slice(&[first, second]),
+            [Some(first), _, _] => out.push(first),
+            _ => {}
+        }
+    }
+}
+
+impl Default for GameData {
+    fn default() -> Self {
+        GameData {
+            chars: [None, None, None],
+        }
     }
 }
 
