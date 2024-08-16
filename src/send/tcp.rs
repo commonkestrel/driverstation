@@ -5,7 +5,35 @@ use crate::traits::Bytes;
 pub struct Packet {
     game_data: Option<GameData>,
     match_info: Option<MatchInfo>,
-    joysticks: Vec<Joysticimpl Packet {}
+    joysticks: Vec<Joystick>,
+}
+
+impl Packet {
+    pub fn with_game_data(mut self, game_data: Option<GameData>) -> Self {
+        self.game_data = game_data;
+        self
+    }
+
+    pub fn with_match_info(mut self, match_info: Option<MatchInfo>) -> Self {
+        self.match_info = match_info;
+        self
+    }
+
+    pub fn with_joystick(mut self, joystick: Joystick) -> Self {
+        self.joysticks.push(joystick);
+        self
+    }
+
+    pub fn with_joysticks(mut self, joysticks: Vec<Joystick>) -> Self {
+        self.joysticks = joysticks;
+        self
+    }
+
+    pub fn extend_joysticks(mut self, mut joysticks: Vec<Joystick>) -> Self {
+        self.joysticks.append(&mut joysticks);
+        self
+    }
+}
 
 impl Bytes for Packet {
     fn write_bytes(&self, out: &mut Vec<u8>) {
@@ -39,7 +67,7 @@ impl Default for Packet {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct GameData {
+pub struct GameData {
     chars: [Option<u8>; 3],
 }
 
@@ -68,7 +96,7 @@ impl Bytes for GameData {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct MatchInfo {
+pub struct MatchInfo {
     competition: Option<CString>,
     ty: MatchType,
 }
@@ -80,10 +108,6 @@ impl MatchInfo {
             None => 5,
         };
 
-ion) => competition.as_bytes().len(),
-            None => 5,
-        };
-        
         // The length of the internal string, plus two bytes for the match type and string length
         (competition_len as u8) + 2
     }

@@ -12,15 +12,18 @@ pub mod send {
 pub mod traits;
 
 use serde::{Deserialize, Serialize};
+use std::net::{SocketAddr, TcpStream, UdpSocket};
+use std::time::Duration;
+use std::io::Write;
 use traits::Bytes;
 
 const UDP_PORT: u16 = 1110;
 const TCP_PORT: u16 = 1740;
+const SIM_IP: [u8; 4] = [127, 0, 0, 1];
 
-const SIM_TCP_ADDR: &str = "127.0.0.1:1740";
-const SIM_UDP_ADDR: &str = "127.0.0.1:1110";
 // There's probably an IP address that DriverStation connects from
-const DS_UDP_ADDR: &str = "127.0.0.1:64651";
+const DS_UDP_IP: [u8; 4] = [127, 0, 0, 1];
+const DS_UDP_PORT: u16 = 64651;
 
 pub struct Robot {
     team: u16,
@@ -47,18 +50,39 @@ impl Robot {
             }
         });
 
-        todo!()
+        Robot {
+            team: team_number,
+            estopped: false,
+            enabled: false,
+            alliance: Alliance::Red1,
+            mode: Mode::Teleoperated,
+        }
     }
 }
 
-fn tcp_thread(team_ip: String) -> std::io::Result<()> {
-    let team_addr = format!("{team_ip}:{TCP_PORT}");
+fn tcp_thread(team_ip: [u8; 4]) -> std::io::Result<()> {
+    loop {
+        let team_addr = SocketAddr::from((team_ip, TCP_PORT));
+        let sim_addr = SocketAddr::from((SIM_IP, TCP_PORT));
 
-    Ok(())
+        let conn = match TcpStream::connect_timeout(&team_addr, Duration::from_millis(100))
+            .or_else(|_| TcpStream::connect_timeout(&sim_addr, Duration::from_millis(100)))
+        {
+            Ok(conn) => conn,
+            Err(err) => {
+                println!("{err}");
+                continue;
+            }
+        };
+
+        loop {
+            
+        }
+    }
 }
 
-fn udp_thread(team_ip: String) -> std::io::Result<()> {
-    let team_addr = format!("{team_ip}:{UDP_PORT}");
+fn udp_thread(team_ip: [u8; 4]) -> std::io::Result<()> {
+    loop {}
 
     Ok(())
 }
@@ -116,6 +140,6 @@ impl Bytes for Alliance {
 }
 
 /// Constructs the RoboRIO IP address from the given team number.
-fn ip_from_team(team: u16) -> String {
-    format!("10.{}.{}.1", team / 100, team % 100)
+fn ip_from_team(team: u16) -> [u8; 4] {
+    [10, (team / 100) as u8, (team % 100) as u8, 1]
 }
