@@ -103,7 +103,6 @@ pub enum UdpEvent {
     RestartCode(bool),
     Alliance(Alliance),
     Tag(Tag),
-    Exit,
 }
 
 #[repr(transparent)]
@@ -199,6 +198,7 @@ struct Request(u8);
 impl Request {
     const REBOOT_ROBORIO_MASK: u8 = 0x08;
     const RESTART_CODE_MASK: u8 = 0x04;
+    const DS_MASK: u8 = 0x10;
 
     pub fn reboot_roborio(&self) -> bool {
         self.0 & Self::REBOOT_ROBORIO_MASK > 0
@@ -233,6 +233,23 @@ impl Request {
         self.set_restart_code(restart_code);
         self
     }
+
+    pub fn ds_connected(&self) -> bool {
+        self.0 & Self::DS_MASK > 0
+    }
+
+    pub fn set_ds_connected(&mut self, ds_connected: bool) {
+        if ds_connected {
+            self.0 |= Self::DS_MASK;
+        } else {
+            self.0 &= !Self::DS_MASK;
+        }
+    }
+
+    pub fn with_ds_connected(mut self, ds_connected: bool) -> Self {
+        self.set_ds_connected(ds_connected);
+        self
+    }
 }
 
 impl Bytes for Request {
@@ -243,7 +260,7 @@ impl Bytes for Request {
 
 impl Default for Request {
     fn default() -> Self {
-        Request(0)
+        Request(0).with_ds_connected(true)
     }
 }
 

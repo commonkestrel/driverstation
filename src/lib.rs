@@ -11,10 +11,14 @@ pub mod send {
 
 pub mod traits;
 
-use send::tcp::{MatchInfo, MatchType, TcpEvent};
+use async_std::io;
+use async_std::prelude::*;
+use async_std::net::{SocketAddr, TcpStream, UdpSocket};
+use send::tcp::Joystick;
+use send::tcp::{self, MatchInfo, MatchType, TcpEvent};
+use send::udp;
 use send::udp::UdpEvent;
 use serde::{Deserialize, Serialize};
-use std::net::{SocketAddr, TcpStream, UdpSocket};
 use std::sync::mpsc::{channel, Receiver, SendError, Sender};
 use std::time::{Duration, Instant};
 use std::io::Write;
@@ -42,21 +46,14 @@ pub struct Robot {
 impl Robot {
     pub fn new(team_number: u16) -> Self {
         let team_ip = ip_from_team(team_number);
-        let cloned_team_ip = team_ip.clone();
+
+        let (conn_tx, conn_rx) = channel();
 
         let (tcp_tx, tcp_rx) = channel();
-        std::thread::spawn(move || {
-            if let Err(err) = tcp_thread(cloned_team_ip, tcp_rx) {
-                todo!()
-            }
-        });
-
+        async_std::task::spawn(tcp_thread(team_ip, tcp_rx, conn_tx));
+        
         let (udp_tx, udp_rx) = channel();
-        std::thread::spawn(move || {
-            if let Err(err) = udp_thread(team_ip, udp_rx) {
-                todo!()
-            }
-        });
+        async_std::task::spawn(udp_thread(team_ip, udp_rx, conn_rx));
 
         tcp_tx.send(TcpEvent::GameData(GameData::empty())).unwrap();
         tcp_tx.send(TcpEvent::MatchInfo(MatchInfo::new(None, MatchType::None))).unwrap();
@@ -82,35 +79,105 @@ impl Robot {
     }
 }
 
-fn tcp_thread(team_ip: [u8; 4], rx: Receiver<TcpEvent>) -> std::io::Result<()> {
+async fn tcp_thread(team_ip: [u8; 4], rx: Receiver<TcpEvent>, conn_tx: Sender<Location>) -> std::io::Result<()> {
     let mut team_addr = SocketAddr::from((team_ip, TCP_PORT));
     let sim_addr = SocketAddr::from((SIM_IP, TCP_PORT));
 
+    let mut game_data = None;
+    let mut match_info = None;
+    let mut joysticks = Vec::new();
 
+    loop {
+        conn_tx.send(Location::None).unwrap();
 
-    'search: loop {
-        let conn = match TcpStream::connect_timeout(&team_addr, Duration::from_millis(100))
-            .or_else(|_| TcpStream::connect_timeout(&sim_addr, Duration::from_millis(100)))
-        {
+        let team_conn = tcp_connect(team_addr, Location::Team);
+        let sim_conn = tcp_connect(sim_addr, Location::Sim);
+        let (location, mut conn) = match team_conn.try_race(sim_conn).await {
             Ok(conn) => conn,
-            Err(err) => {
-                println!("{err}");
-                continue;
-            }
+            Err(_) => continue,
         };
+        conn_tx.send(location).unwrap();
+        conn.set_nodelay(true)?;
 
         loop {
             let start = Instant::now();
 
-            std::thread::sleep(Duration::from_secs(1))
+            for ev in rx.try_iter() {
+                match ev {
+                    TcpEvent::Exit => return Ok(()),
+                    TcpEvent::GameData(gd) => game_data = Some(gd),
+                    TcpEvent::MatchInfo(mi) => match_info = Some(mi),
+                    TcpEvent::Joystick(js) => joysticks.push(js),
+                }
+            }
+
+            let mut copied = Vec::with_capacity(joysticks.len());
+            copied.append(&mut joysticks);
+
+            let packet = tcp::Packet::default()
+                .with_game_data(game_data)
+                .with_match_info(match_info)
+                .with_joysticks(copied);
+
+            game_data = None;
+            match_info = None;
+
+            let mut send = Vec::new();
+            packet.write_bytes(&mut send);
+            if conn.write_all(&send).await.is_err() {
+                break;
+            }
+
+            // Sends a TCP packet every second
+            std::thread::sleep(Duration::from_secs(1) - Instant::now().duration_since(start));
         }
     }
 }
 
-fn udp_thread(team_ip: [u8; 4], rx: Receiver<UdpEvent>) -> std::io::Result<()> {
-    loop {}
+async fn udp_thread(team_ip: [u8; 4], rx: Receiver<UdpEvent>, conn_rx: Receiver<Location>) -> std::io::Result<()> {
+    let mut team_addr = SocketAddr::from((team_ip, UDP_PORT));
+    let sim_addr = SocketAddr::from((SIM_IP, UDP_PORT));
+
+    let socket = UdpSocket::bind(SocketAddr::from((DS_UDP_IP, DS_UDP_PORT))).await?;
+    let mut sequence: u16 = 0x0000;
+
+    for connection in conn_rx {
+        if connection != Location::None {
+            let addr = match connection {
+                Location::Team => team_addr,
+                Location::Sim => sim_addr,
+                Location::None => unreachable!(),
+            };
+            socket.connect(addr).await?;
+
+            loop {
+                let start = Instant::now();
+
+                let packet = udp::Packet::default()
+                    .with_sequence(sequence);
+
+                let mut send = Vec::new();
+                packet.write_bytes(&mut send);
+                socket.send(&send).await?;
+                sequence = sequence.wrapping_add(1);
+
+                std::thread::sleep(Duration::from_millis(20) - Instant::now().duration_since(start));
+            }
+        }
+    }
 
     Ok(())
+}
+
+async fn tcp_connect(ip: SocketAddr, location: Location) -> io::Result<(Location, TcpStream)> {
+    TcpStream::connect(ip).await.map(|stream| (location, stream))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Location {
+    Team,
+    Sim,
+    None,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
