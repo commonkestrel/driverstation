@@ -9,12 +9,12 @@ transmit joysticks, and handle logs.
 This crate is very much a work in progress,
 so here's a list of things that need to be done and whether or not they are implemented:
 
-- [ ] Auto-connect to a simulation robot
+- [x] Auto-connect to a simulation robot
 - [ ] Auto-connect to a robot through a radio link
 - [ ] Parse incoming UDP packets
 - [ ] Parse incoming TCP packets
 - [x] Construct outgoing UDP packets
-- [ ] Construct outgoing TCP packets
+- [x] Construct outgoing TCP packets
 - [ ] Estop robot
 - [ ] Enable/disable robot
 - [ ] Change alliance station
