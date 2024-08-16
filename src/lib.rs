@@ -70,6 +70,22 @@ impl Robot {
         }
     }
 
+    pub fn set_enabled(&mut self, enabled: bool) {
+        self.queue_udp(UdpEvent::Enabled(enabled));
+    }
+
+    pub fn set_estopped(&mut self, estopped: bool) {
+        self.queue_udp(UdpEvent::Estopped(estopped));
+    }
+
+    pub fn set_mode(&mut self, mode: Mode) {
+        self.queue_udp(UdpEvent::Mode(mode));
+    }
+
+    pub fn set_alliance(&mut self, alliance: Alliance) {
+        self.queue_udp(UdpEvent::Alliance(alliance));
+    }
+
     pub fn queue_tcp(&mut self, ev: TcpEvent) {
         self.tcp_tx.send(ev).unwrap();
     }
@@ -141,6 +157,14 @@ async fn udp_thread(team_ip: [u8; 4], rx: Receiver<UdpEvent>, conn_rx: Receiver<
     let socket = UdpSocket::bind(SocketAddr::from((DS_UDP_IP, DS_UDP_PORT))).await?;
     let mut sequence: u16 = 0x0000;
 
+    let mut estopped = false;
+    let mut enabled = false;
+    let mut fms_connected = false;
+    let mut alliance = Alliance::Red1;
+    let mut mode = Mode::Teleoperated;
+    let mut restarting_code = false;
+    let mut tags = Vec::new();
+    
     for connection in conn_rx {
         if connection != Location::None {
             let addr = match connection {
@@ -149,19 +173,48 @@ async fn udp_thread(team_ip: [u8; 4], rx: Receiver<UdpEvent>, conn_rx: Receiver<
                 Location::None => unreachable!(),
             };
             socket.connect(addr).await?;
+            let mut rebooting_roborio = false;
 
             loop {
                 let start = Instant::now();
 
-                let packet = udp::Packet::default()
-                    .with_sequence(sequence);
+                for ev in rx.try_iter() {
+                    match ev {
+                        UdpEvent::Enabled(e) => enabled = e,
+                        UdpEvent::Estopped(e) => estopped = e,
+                        UdpEvent::FmsConnected(fc) => fms_connected = fc,
+                        UdpEvent::Alliance(a) => alliance = a,
+                        UdpEvent::Mode(m) => mode = m,
+                        UdpEvent::Tag(tag) => tags.push(tag),
+                        UdpEvent::RestartCode => restarting_code = true,
+                        UdpEvent::RebootRoborio => rebooting_roborio = true,
+                    }
+                    
+                }
 
+                let mut send_tags = Vec::new();
+                send_tags.append(&mut tags);
+            
+                let packet = udp::Packet::default()
+                    .with_sequence(sequence)
+                    .with_enabled(enabled)
+                    .with_estopped(estopped)
+                    .with_alliance(alliance)
+                    .with_fms_connected(fms_connected)
+                    .with_mode(mode)
+                    .with_reboot_roborio(rebooting_roborio)
+                    .with_restart_code(restarting_code)
+                    .with_tags(send_tags);
+                
                 let mut send = Vec::new();
                 packet.write_bytes(&mut send);
                 socket.send(&send).await?;
                 sequence = sequence.wrapping_add(1);
 
-                std::thread::sleep(Duration::from_millis(20) - Instant::now().duration_since(start));
+                let duration = Instant::now().duration_since(start);
+                if duration < Duration::from_millis(20) {
+                    std::thread::sleep(Duration::from_millis(20) - Instant::now().duration_since(start));
+                }
             }
         }
     }

@@ -99,8 +99,8 @@ pub enum UdpEvent {
     Estopped(bool),
     FmsConnected(bool),
     Mode(Mode),
-    RebootRoborio(bool),
-    RestartCode(bool),
+    RebootRoborio,
+    RestartCode,
     Alliance(Alliance),
     Tag(Tag),
 }
