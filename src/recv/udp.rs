@@ -1,4 +1,4 @@
-use std::mem::size_of;
+use std::{f32::MIN, mem::size_of};
 
 use crate::Mode;
 
@@ -8,8 +8,7 @@ const MIN_RESPONSE_SIZE: usize = size_of::<u16>()
     + size_of::<Status>()
     + size_of::<Trace>()
     + size_of::<Battery>()
-    + size_of::<bool>()
-    + size_of::<u8>();
+    + size_of::<bool>();
 
 pub struct UdpResponse {
     pub sequence: u16,
@@ -32,6 +31,7 @@ impl TryFrom<&[u8]> for UdpResponse {
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         if value.len() < MIN_RESPONSE_SIZE {
+            println!("response too small");
             return Err(UdpParseError::InvalidTag);
         }
 
@@ -41,7 +41,11 @@ impl TryFrom<&[u8]> for UdpResponse {
         let trace = Trace::from_bits(value[4]);
         let battery = Battery::from_bits([value[5], value[6]]);
         let first_conn = value[7] > 0;
-        let tags = Tag::parse_tags(&value[8..])?;
+        let tags = if value.len() > MIN_RESPONSE_SIZE {
+            Tag::parse_tags(&value[8..])?
+        } else {
+            Vec::new()
+        };
 
         Ok(UdpResponse {
             sequence,
@@ -205,6 +209,8 @@ impl Tag {
             let length = buf[i];
 
             if length as usize >= buf.len() - i {
+                println!("mismatched buffer size as {i}/{}: {length} != {}", buf.len(), buf.len() - i);
+                println!("{buf:?}");
                 return Err(UdpParseError::InvalidTag);
             }
 
@@ -281,7 +287,7 @@ impl Tag {
                     0x06 => {
                         // RAM Info
                         if length - 1 < Self::RAM_INFO_LENGTH {
-                            println!("invalid pdp info length at {i}");
+                            println!("invalid RAM info length at {i}");
                             return Err(UdpParseError::InvalidTag);
                         }
 
@@ -296,6 +302,7 @@ impl Tag {
                     0x08 => {
                         // PDP Log
                         if length - 1 < Self::PDP_LOG_LENGTH {
+                            println!("invalid pdp info length at {i}");
                             return Err(UdpParseError::InvalidTag);
                         }
 
@@ -329,7 +336,7 @@ impl Tag {
                     0x0e => {
                         // CAN Metrics
                         if length - 1 < Self::CAN_METRICS_LENGTH {
-                            println!("invalid can metrics length at {i}");
+                            println!("invalid CAN metrics length at {i}");
                             return Err(UdpParseError::InvalidLength);
                         }
 

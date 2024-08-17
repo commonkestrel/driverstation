@@ -52,6 +52,11 @@ impl Packet {
         self
     }
 
+    pub fn with_ds_connected(mut self, connected: bool) -> Self {
+        self.req.set_ds_connected(connected);
+        self
+    }
+
     pub fn with_tag(mut self, tag: Tag) -> Self {
         self.tags.push(tag);
         self
@@ -71,7 +76,7 @@ impl Packet {
 impl Default for Packet {
     fn default() -> Self {
         Packet {
-            sequence: 0,
+            sequence: 1,
             version: 0x01,
             ctrl: Control::default(),
             req: Request::default(),
@@ -260,7 +265,7 @@ impl Bytes for Request {
 
 impl Default for Request {
     fn default() -> Self {
-        Request(0).with_ds_connected(true)
+        Request(0)
     }
 }
 

@@ -18,7 +18,8 @@ use send::udp;
 use send::udp::UdpEvent;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
-pub use std::sync::mpsc::{channel, Receiver, Sender};
+use std::task::Poll;
+pub use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::net::{TcpStream, UdpSocket};
@@ -36,13 +37,13 @@ const SIM_IP: [u8; 4] = [127, 0, 0, 1];
 // There's probably an IP address that DriverStation connects from
 const DS_UDP_IP: [u8; 4] = [0, 0, 0, 0];
 const DS_SIM_UDP_IP: [u8; 4] = [127, 0, 0, 1];
-const DS_UDP_TX_PORT: u16 = 6789;
+const DS_UDP_TX_PORT: u16 = 56789;
 const DS_UDP_RX_PORT: u16 = 1150;
 
 pub struct Robot {
     state: Arc<RwLock<State>>,
-    tcp_tx: Sender<TcpEvent>,
-    udp_tx: Sender<UdpEvent>,
+    tcp_tx: UnboundedSender<TcpEvent>,
+    udp_tx: UnboundedSender<UdpEvent>,
     rt: sync::Runtime,
 }
 
@@ -51,15 +52,15 @@ impl Robot {
         let team_ip = ip_from_team(team_number);
 
         let state = Arc::new(RwLock::new(State::new(team_number)));
-        let (conn_tx, conn_rx) = channel();
+        let (conn_tx, conn_rx) = unbounded_channel();
 
         let rt = sync::Runtime::current().unwrap();
 
-        let (tcp_tx, tcp_rx) = channel();
-        rt.spawn(tcp_thread(team_ip, state.clone(), tcp_rx, conn_tx));
+        let (tcp_tx, tcp_rx) = unbounded_channel();
+        rt.spawn(tcp_thread(team_ip, state.clone(), tcp_rx, conn_rx));
 
-        let (udp_tx, udp_rx) = channel();
-        rt.spawn(udp_thread(team_ip, state.clone(), udp_rx, conn_rx));
+        let (udp_tx, udp_rx) = unbounded_channel();
+        rt.spawn(udp_thread(team_ip, state.clone(), udp_rx, conn_tx));
 
         tcp_tx.send(TcpEvent::GameData(GameData::empty())).unwrap();
         tcp_tx
@@ -232,8 +233,8 @@ impl State {
 async fn tcp_thread(
     team_ip: [u8; 4],
     state: Arc<RwLock<State>>,
-    rx: Receiver<TcpEvent>,
-    conn_tx: Sender<Location>,
+    mut rx: UnboundedReceiver<TcpEvent>,
+    mut conn_rx: UnboundedReceiver<Option<SocketAddr>>,
 ) -> std::io::Result<()> {
     let mut team_addr = SocketAddr::from((team_ip, TCP_PORT));
     let sim_addr = SocketAddr::from((SIM_IP, TCP_PORT));
@@ -243,27 +244,25 @@ async fn tcp_thread(
     let mut joysticks = Vec::new();
 
     loop {
-        conn_tx.send(Location::None).unwrap();
-
-        let team_conn = tcp_connect(team_addr, Location::Team);
-        let sim_conn = tcp_connect(sim_addr, Location::Sim);
-
-        let conn_result = select! {
-            conn = team_conn => conn,
-            conn = sim_conn => conn,
+        let mut addr = match conn_rx.recv().await {
+            Some(location) => match location {
+                Some(addr) => addr,
+                None => continue,
+            }
+            None => return Ok(()),
         };
+        addr.set_port(TCP_PORT);
 
-        let (location, mut conn) = match conn_result {
+        let mut conn = match TcpStream::connect(addr).await {
             Ok(conn) => conn,
             Err(_) => continue,
         };
-        conn_tx.send(location).unwrap();
         conn.set_nodelay(true)?;
 
         loop {
             let start = Instant::now();
 
-            for ev in rx.try_iter() {
+            while let Ok(ev) = rx.try_recv() {
                 match ev {
                     TcpEvent::Exit => return Ok(()),
                     TcpEvent::GameData(gd) => game_data = Some(gd),
@@ -298,13 +297,13 @@ async fn tcp_thread(
 async fn udp_thread(
     team_ip: [u8; 4],
     state: Arc<RwLock<State>>,
-    rx: Receiver<UdpEvent>,
-    conn_rx: Receiver<Location>,
+    mut rx: UnboundedReceiver<UdpEvent>,
+    conn_tx: UnboundedSender<Option<SocketAddr>>,
 ) -> std::io::Result<()> {
     let mut team_addr = SocketAddr::from((team_ip, UDP_PORT));
     let sim_addr = SocketAddr::from((SIM_IP, UDP_PORT));
 
-    let mut sequence: u16 = 0x0000;
+    let mut sequence: u16 = 0x0001;
 
     let mut estopped = false;
     let mut enabled = false;
@@ -314,102 +313,86 @@ async fn udp_thread(
     let mut restarting_code = false;
     let mut tags = Vec::new();
 
-    for connection in conn_rx {
-        if connection != Location::None {
-            let (bind_addr, rio_addr) = match connection {
-                Location::Team => (DS_UDP_IP, team_addr),
-                Location::Sim => (DS_SIM_UDP_IP, sim_addr),
-                Location::None => unreachable!(),
-            };
+    let udp_tx = UdpSocket::bind(SocketAddr::from((DS_UDP_IP, DS_UDP_TX_PORT))).await?;
+    let udp_rx = UdpSocket::bind(SocketAddr::from((DS_UDP_IP, DS_UDP_RX_PORT))).await?;
 
-            let udp_tx = UdpSocket::bind(SocketAddr::from((bind_addr, DS_UDP_TX_PORT))).await?;
-            udp_tx.connect(rio_addr).await?;
+    udp_tx.connect(sim_addr).await?;
+    udp_tx.connect(team_addr).await?;
+    let mut last = Instant::now();
 
-            let mut udp_rx = UdpSocket::bind(SocketAddr::from((bind_addr, DS_UDP_RX_PORT))).await?;
-            udp_rx.connect(rio_addr).await?;
+    loop {
+        let mut rebooting_roborio = false;
 
-            let mut rebooting_roborio = false;
+        loop {
+            let start = Instant::now();
 
-            loop {
-                let start = Instant::now();
+            while let Ok(ev) = rx.try_recv() {
+                match ev {
+                    UdpEvent::Enabled(e) => enabled = e,
+                    UdpEvent::Estopped(e) => estopped = e,
+                    UdpEvent::FmsConnected(fc) => fms_connected = fc,
+                    UdpEvent::Alliance(a) => alliance = a,
+                    UdpEvent::Mode(m) => mode = m,
+                    UdpEvent::Tag(tag) => tags.push(tag),
+                    UdpEvent::RestartCode => restarting_code = true,
+                    UdpEvent::RebootRoborio => rebooting_roborio = true,
+                }
+            }
 
-                for ev in rx.try_iter() {
-                    match ev {
-                        UdpEvent::Enabled(e) => enabled = e,
-                        UdpEvent::Estopped(e) => estopped = e,
-                        UdpEvent::FmsConnected(fc) => fms_connected = fc,
-                        UdpEvent::Alliance(a) => alliance = a,
-                        UdpEvent::Mode(m) => mode = m,
-                        UdpEvent::Tag(tag) => tags.push(tag),
-                        UdpEvent::RestartCode => restarting_code = true,
-                        UdpEvent::RebootRoborio => rebooting_roborio = true,
+            let mut send_tags = Vec::new();
+            send_tags.append(&mut tags);
+
+            let connected = state.read().await.connected;
+
+            let packet = udp::Packet::default()
+                .with_sequence(sequence)
+                .with_ds_connected(connected)
+                .with_enabled(enabled)
+                .with_estopped(estopped)
+                .with_alliance(alliance)
+                .with_fms_connected(fms_connected)
+                .with_mode(mode)
+                .with_reboot_roborio(rebooting_roborio)
+                .with_restart_code(restarting_code)
+                .with_tags(send_tags);
+
+            let mut send = Vec::new();
+            packet.write_bytes(&mut send);
+            udp_tx.send(&send).await?;
+            sequence = sequence.wrapping_add(1);
+
+            let mut buf = [0u8; 100];
+            match udp_rx.try_recv_from(&mut buf) {
+                Ok((bytes, addr)) => if let Ok(packet) = UdpResponse::try_from(&buf[0..bytes]) {
+                    conn_tx.send(Some(addr)).unwrap();
+                    last = Instant::now();
+                    let mut current_state = state.write().await;
+
+                    current_state.connected = true;
+                    current_state.enabled = packet.status.enabled();
+                    current_state.estopped = packet.status.estopped();
+                    current_state.mode = packet.status.mode();
+                    current_state.code = packet.status.code_start();
+                    current_state.battery = packet.battery.voltage();
+                } else if let Err(err) = UdpResponse::try_from(&buf[0..bytes]) {
+                    println!("{err:?}");
+                },
+                Err(err) => {
+                    if last.elapsed() > Duration::from_millis(500) {
+                        state.write().await.connected = false;
+                        conn_tx.send(None).unwrap();
                     }
                 }
+            }
 
-                let mut send_tags = Vec::new();
-                send_tags.append(&mut tags);
-
-                let packet = udp::Packet::default()
-                    .with_sequence(sequence)
-                    .with_enabled(enabled)
-                    .with_estopped(estopped)
-                    .with_alliance(alliance)
-                    .with_fms_connected(fms_connected)
-                    .with_mode(mode)
-                    .with_reboot_roborio(rebooting_roborio)
-                    .with_restart_code(restarting_code)
-                    .with_tags(send_tags);
-
-                let mut send = Vec::new();
-                packet.write_bytes(&mut send);
-                udp_tx.send(&send).await?;
-                sequence = sequence.wrapping_add(1);
-
-                let mut buf = [0u8; 100];
-                match udp_rx.try_recv(&mut buf) {
-                    Ok(bytes) => if let Ok(packet) = UdpResponse::try_from(&buf[0..bytes]) {
-                        let mut current_state = state.write().await;
-
-
-
-                        current_state.connected = true;
-                        current_state.enabled = packet.status.enabled();
-                        current_state.estopped = packet.status.estopped();
-                        current_state.mode = packet.status.mode();
-                        current_state.code = packet.status.code_start();
-                        current_state.battery = packet.battery.voltage();
-                    } else if let Err(err) = UdpResponse::try_from(&buf[0..bytes]) {
-                        println!("{err:?}");
-                    },
-                    Err(err) => {
-                        println!("{err:?}");
-                    }
-                }
-
-                let duration = Instant::now().duration_since(start);
-                if duration < Duration::from_millis(20) {
-                    std::thread::sleep(
-                        Duration::from_millis(20) - Instant::now().duration_since(start),
-                    );
-                }
+            let duration = Instant::now().duration_since(start);
+            if duration < Duration::from_millis(20) {
+                std::thread::sleep(
+                    Duration::from_millis(20) - start.elapsed(),
+                );
             }
         }
     }
-
-    Ok(())
-}
-
-async fn tcp_connect(ip: SocketAddr, location: Location) -> io::Result<(Location, TcpStream)> {
-    TcpStream::connect(ip)
-        .await
-        .map(|stream| (location, stream))
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum Location {
-    Team,
-    Sim,
-    None,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
