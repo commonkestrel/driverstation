@@ -21,6 +21,7 @@ pub struct UdpResponse {
     pub tags: Vec<Tag>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UdpParseError {
     InvalidLength,
     InvalidTag,
@@ -208,10 +209,12 @@ impl Tag {
             }
 
             if length > 0 {
+                i += 1;
                 match buf[i] {
                     0x01 => {
                         // Joystick Output
                         if length - 1 < Self::JOYSTICK_OUTPUT_LENGTH {
+                            println!("invalid joystick length at {i}");
                             return Err(UdpParseError::InvalidTag);
                         }
 
@@ -230,6 +233,7 @@ impl Tag {
                     0x04 => {
                         // Disk Info
                         if length - 1 < Self::DISK_INFO_LENGTH {
+                            println!("invalid disk info length at {i}");
                             return Err(UdpParseError::InvalidTag);
                         }
 
@@ -242,6 +246,7 @@ impl Tag {
                     0x05 => {
                         // CPU Info
                         if length - 1 < Self::CPU_INFO_LENGTH {
+                            println!("invalid cpu info length at {i}");
                             return Err(UdpParseError::InvalidTag);
                         }
 
@@ -276,6 +281,7 @@ impl Tag {
                     0x06 => {
                         // RAM Info
                         if length - 1 < Self::RAM_INFO_LENGTH {
+                            println!("invalid pdp info length at {i}");
                             return Err(UdpParseError::InvalidTag);
                         }
 
@@ -323,6 +329,7 @@ impl Tag {
                     0x0e => {
                         // CAN Metrics
                         if length - 1 < Self::CAN_METRICS_LENGTH {
+                            println!("invalid can metrics length at {i}");
                             return Err(UdpParseError::InvalidLength);
                         }
 

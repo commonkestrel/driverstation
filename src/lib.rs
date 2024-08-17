@@ -365,12 +365,12 @@ async fn udp_thread(
                 udp_tx.send(&send).await?;
                 sequence = sequence.wrapping_add(1);
 
-                println!("before");
-
                 let mut buf = [0u8; 100];
                 match udp_rx.try_recv(&mut buf) {
-                    Ok(bytes) => if let Ok(packet) = UdpResponse::try_from(buf.as_slice()) {
+                    Ok(bytes) => if let Ok(packet) = UdpResponse::try_from(&buf[0..bytes]) {
                         let mut current_state = state.write().await;
+
+
 
                         current_state.connected = true;
                         current_state.enabled = packet.status.enabled();
@@ -378,11 +378,13 @@ async fn udp_thread(
                         current_state.mode = packet.status.mode();
                         current_state.code = packet.status.code_start();
                         current_state.battery = packet.battery.voltage();
+                    } else if let Err(err) = UdpResponse::try_from(&buf[0..bytes]) {
+                        println!("{err:?}");
                     },
-                    Err(err) => {}
+                    Err(err) => {
+                        println!("{err:?}");
+                    }
                 }
-
-                println!("after");
 
                 let duration = Instant::now().duration_since(start);
                 if duration < Duration::from_millis(20) {
@@ -523,5 +525,5 @@ impl Default for GameData {
 
 /// Constructs the RoboRIO IP address from the given team number.
 fn ip_from_team(team: u16) -> [u8; 4] {
-    [10, (team / 100) as u8, (team % 100) as u8, 1]
+    [10, (team / 100) as u8, (team % 100) as u8, 2]
 }
