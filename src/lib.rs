@@ -10,15 +10,19 @@ pub mod send {
 }
 
 pub mod traits;
+mod sync;
 
+use recv::udp::{CodeStatus, UdpResponse};
 use send::tcp::{self, MatchInfo, MatchType, TcpEvent};
 use send::udp;
 use send::udp::UdpEvent;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
-use std::sync::mpsc::{channel, Receiver, SendError, Sender};
+pub use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::net::{TcpStream, UdpSocket};
+use tokio::sync::RwLock;
 use tokio::{
     io::{self, AsyncWriteExt},
     select,
@@ -36,27 +40,26 @@ const DS_UDP_TX_PORT: u16 = 6789;
 const DS_UDP_RX_PORT: u16 = 1150;
 
 pub struct Robot {
-    team: u16,
-    estopped: bool,
-    enabled: bool,
-    alliance: Alliance,
-    mode: Mode,
-    game_data: GameData,
+    state: Arc<RwLock<State>>,
     tcp_tx: Sender<TcpEvent>,
     udp_tx: Sender<UdpEvent>,
+    rt: sync::Runtime,
 }
 
 impl Robot {
     pub fn new(team_number: u16) -> Self {
         let team_ip = ip_from_team(team_number);
 
+        let state = Arc::new(RwLock::new(State::new(team_number)));
         let (conn_tx, conn_rx) = channel();
 
+        let rt = sync::Runtime::current().unwrap();
+
         let (tcp_tx, tcp_rx) = channel();
-        tokio::task::spawn(tcp_thread(team_ip, tcp_rx, conn_tx));
+        rt.spawn(tcp_thread(team_ip, state.clone(), tcp_rx, conn_tx));
 
         let (udp_tx, udp_rx) = channel();
-        tokio::task::spawn(udp_thread(team_ip, udp_rx, conn_rx));
+        rt.spawn(udp_thread(team_ip, state.clone(), udp_rx, conn_rx));
 
         tcp_tx.send(TcpEvent::GameData(GameData::empty())).unwrap();
         tcp_tx
@@ -64,14 +67,10 @@ impl Robot {
             .unwrap();
 
         Robot {
-            team: team_number,
-            estopped: false,
-            enabled: false,
-            alliance: Alliance::Red1,
-            mode: Mode::Teleoperated,
-            game_data: GameData::default(),
+            state,
             tcp_tx,
             udp_tx,
+            rt,
         }
     }
 
@@ -100,8 +99,139 @@ impl Robot {
     }
 }
 
+#[cfg(feature = "sync")]
+impl Robot {
+    pub fn connected(&self) -> bool {
+        self.rt.block_on(self._connected())
+    }
+
+    pub fn enabled(&self) -> bool {
+        self.rt.block_on(self._enabled())
+    }
+
+    pub fn estopped(&self) -> bool {
+        self.rt.block_on(self._estopped())
+    }
+
+    pub fn alliance(&self) -> Alliance {
+        self.rt.block_on(self._alliance())
+    }
+
+    pub fn mode(&self) -> Mode {
+        self.rt.block_on(self._mode())
+    }
+
+    pub fn code(&self) -> CodeStatus {
+        self.rt.block_on(self._code())
+    }
+
+    pub fn battery(&self) -> f32 {
+        self.rt.block_on(self._battery())
+    }
+
+    pub fn game_data(&self) -> GameData {
+        self.rt.block_on(self._game_data())
+    }
+
+    pub async fn _connected(&self) -> bool {
+        self.state.read().await.connected
+    }
+
+    pub async fn _enabled(&self) -> bool {
+        self.state.read().await.enabled
+    }
+
+    pub async fn _estopped(&self) -> bool {
+        self.state.read().await.estopped
+    }
+
+    pub async fn _alliance(&self) -> Alliance {
+        self.state.read().await.alliance
+    }
+
+    pub async fn _mode(&self) -> Mode {
+        self.state.read().await.mode
+    }
+
+    pub async fn _game_data(&self) -> GameData {
+        self.state.read().await.game_data
+    }
+
+    pub async fn _code(&self) -> CodeStatus {
+        self.state.read().await.code
+    }
+
+    pub async fn _battery(&self) -> f32 {
+        self.state.read().await.battery
+    }
+}
+
+#[cfg(not(feature = "sync"))]
+impl Robot {
+    pub async fn connected(&self) -> bool {
+        self.state.read().await.connected
+    }
+
+    pub async fn enabled(&self) -> bool {
+        self.state.read().await.enabled
+    }
+
+    pub async fn estopped(&self) -> bool {
+        self.state.read().await.estopped
+    }
+
+    pub async fn alliance(&self) -> Alliance {
+        self.state.read().await.alliance
+    }
+
+    pub async fn mode(&self) -> Mode {
+        self.state.read().await.mode
+    }
+
+    pub async fn game_data(&self) -> GameData {
+        self.state.read().await.game_data
+    }
+
+    pub async fn code(&self) -> CodeStatus {
+        self.state.read().await.code
+    }
+
+    pub async fn battery(&self) -> f32 {
+        self.state.read().await.battery
+    }
+}
+
+struct State {
+    connected: bool,
+    team: u16,
+    estopped: bool,
+    enabled: bool,
+    alliance: Alliance,
+    mode: Mode,
+    game_data: GameData,
+    code: CodeStatus,
+    battery: f32,
+}
+
+impl State {
+    fn new(team_number: u16) -> State {
+        State {
+            connected: false,
+            team: team_number,
+            estopped: false,
+            enabled: false,
+            alliance: Alliance::Red1,
+            mode: Mode::Teleoperated,
+            game_data: GameData::default(),
+            code: CodeStatus::Initializing,
+            battery: 0.0,
+        }
+    }
+}
+
 async fn tcp_thread(
     team_ip: [u8; 4],
+    state: Arc<RwLock<State>>,
     rx: Receiver<TcpEvent>,
     conn_tx: Sender<Location>,
 ) -> std::io::Result<()> {
@@ -167,6 +297,7 @@ async fn tcp_thread(
 
 async fn udp_thread(
     team_ip: [u8; 4],
+    state: Arc<RwLock<State>>,
     rx: Receiver<UdpEvent>,
     conn_rx: Receiver<Location>,
 ) -> std::io::Result<()> {
@@ -238,7 +369,16 @@ async fn udp_thread(
 
                 let mut buf = [0u8; 100];
                 match udp_rx.try_recv(&mut buf) {
-                    Ok(bytes) => {}
+                    Ok(bytes) => if let Ok(packet) = UdpResponse::try_from(buf.as_slice()) {
+                        let mut current_state = state.write().await;
+
+                        current_state.connected = true;
+                        current_state.enabled = packet.status.enabled();
+                        current_state.estopped = packet.status.estopped();
+                        current_state.mode = packet.status.mode();
+                        current_state.code = packet.status.code_start();
+                        current_state.battery = packet.battery.voltage();
+                    },
                     Err(err) => {}
                 }
 

@@ -12,13 +12,13 @@ const MIN_RESPONSE_SIZE: usize = size_of::<u16>()
     + size_of::<u8>();
 
 pub struct UdpResponse {
-    sequence: u16,
-    comm_version: u8,
-    status: Status,
-    trace: Trace,
-    battery: Battery,
-    first_conn: bool,
-    tags: Vec<Tag>,
+    pub sequence: u16,
+    pub comm_version: u8,
+    pub status: Status,
+    pub trace: Trace,
+    pub battery: Battery,
+    pub first_conn: bool,
+    pub tags: Vec<Tag>,
 }
 
 pub enum UdpParseError {
@@ -54,6 +54,7 @@ impl TryFrom<&[u8]> for UdpResponse {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Status(u8);
 
 impl Status {
@@ -95,6 +96,7 @@ impl Status {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Trace(u8);
 
 impl Trace {
@@ -134,6 +136,7 @@ impl Trace {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Battery(u16);
 
 impl Battery {
@@ -149,6 +152,7 @@ impl Battery {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Tag {
     JoystickOutput {
         /// 1 bit per output, stored LSB 0
@@ -187,10 +191,10 @@ pub enum Tag {
 impl Tag {
     const JOYSTICK_OUTPUT_LENGTH: u8 = 8;
     const DISK_INFO_LENGTH: u8 = 4;
-    const CPU_INFO_LENGTH: u8 = 5*4;
-    const RAM_INFO_LENGTH: u8 = 2*4;
-    const PDP_LOG_LENGTH: u8 = 1+21+3;
-    const CAN_METRICS_LENGTH: u8 = 4+4+4+1+1;
+    const CPU_INFO_LENGTH: u8 = 5 * 4;
+    const RAM_INFO_LENGTH: u8 = 2 * 4;
+    const PDP_LOG_LENGTH: u8 = 1 + 21 + 3;
+    const CAN_METRICS_LENGTH: u8 = 4 + 4 + 4 + 1 + 1;
 
     pub fn parse_tags(buf: &[u8]) -> Result<Vec<Tag>, UdpParseError> {
         let mut tags = Vec::new();
@@ -229,7 +233,8 @@ impl Tag {
                             return Err(UdpParseError::InvalidTag);
                         }
 
-                        let free_space = u32::from_be_bytes([buf[i+1], buf[i+2], buf[i+3], buf[i+4]]);
+                        let free_space =
+                            u32::from_be_bytes([buf[i + 1], buf[i + 2], buf[i + 3], buf[i + 4]]);
                         i += 4;
 
                         tags.push(Tag::DiskInfo { free_space })
@@ -240,14 +245,33 @@ impl Tag {
                             return Err(UdpParseError::InvalidTag);
                         }
 
-                        let num_cpus = f32::from_be_bytes([buf[i+1], buf[i+2], buf[i+3], buf[i+4]]);
-                        let critical = f32::from_be_bytes([buf[i+5], buf[i+6], buf[i+7], buf[i+8]]);
-                        let above_normal = f32::from_be_bytes([buf[i+9], buf[i+10], buf[i+11], buf[i+12]]);
-                        let normal = f32::from_be_bytes([buf[i+13], buf[i+14], buf[i+15], buf[i+16]]);
-                        let low = f32::from_be_bytes([buf[i+17], buf[i+18], buf[i+19], buf[i+20]]);
+                        let num_cpus =
+                            f32::from_be_bytes([buf[i + 1], buf[i + 2], buf[i + 3], buf[i + 4]]);
+                        let critical =
+                            f32::from_be_bytes([buf[i + 5], buf[i + 6], buf[i + 7], buf[i + 8]]);
+                        let above_normal =
+                            f32::from_be_bytes([buf[i + 9], buf[i + 10], buf[i + 11], buf[i + 12]]);
+                        let normal = f32::from_be_bytes([
+                            buf[i + 13],
+                            buf[i + 14],
+                            buf[i + 15],
+                            buf[i + 16],
+                        ]);
+                        let low = f32::from_be_bytes([
+                            buf[i + 17],
+                            buf[i + 18],
+                            buf[i + 19],
+                            buf[i + 20],
+                        ]);
                         i += 20;
 
-                        tags.push(Tag::CPUInfo { num_cpus, critical, above_normal, normal, low });
+                        tags.push(Tag::CPUInfo {
+                            num_cpus,
+                            critical,
+                            above_normal,
+                            normal,
+                            low,
+                        });
                     }
                     0x06 => {
                         // RAM Info
@@ -255,8 +279,10 @@ impl Tag {
                             return Err(UdpParseError::InvalidTag);
                         }
 
-                        let block = u32::from_be_bytes([buf[i+1], buf[i+2], buf[i+3], buf[i+4]]);
-                        let free_space = u32::from_be_bytes([buf[i+5], buf[i+6], buf[i+7], buf[i+8]]);
+                        let block =
+                            u32::from_be_bytes([buf[i + 1], buf[i + 2], buf[i + 3], buf[i + 4]]);
+                        let free_space =
+                            u32::from_be_bytes([buf[i + 5], buf[i + 6], buf[i + 7], buf[i + 8]]);
                         i += 8;
 
                         tags.push(Tag::RAMInfo { block, free_space });
@@ -269,24 +295,22 @@ impl Tag {
 
                         i += 1;
                         let stats = [
-                            (buf[i] as u16) + ((buf[i+1] as u16) << 8) * 0x03FF,
-                            (((buf[i+1] >> 2) as u16) + ((buf[i+2] as u16) << 6)) & 0x03FF,
-                            (((buf[i+2] >> 4) as u16) + ((buf[i+3] as u16) << 4)) & 0x03FF,
-                            (((buf[i+3] >> 6) as u16) + ((buf[i+4] as u16) << 2)) & 0x03FF,
-                            (buf[i+5] as u16) + ((buf[i+6] as u16) << 8) & 0x03FF,
-                            (((buf[i+6] >> 2) as u16) + ((buf[i+7] as u16) << 6)) & 0x03FF,
-
-                            (buf[i+8] as u16) + ((buf[i+9] as u16) << 8) * 0x03FF,
-                            (((buf[i+9] >> 2) as u16) + ((buf[i+10] as u16) << 6)) & 0x03FF,
-                            (((buf[i+10] >> 4) as u16) + ((buf[i+11] as u16) << 4)) & 0x03FF,
-                            (((buf[i+11] >> 6) as u16) + ((buf[i+12] as u16) << 2)) & 0x03FF,
-                            (buf[i+13] as u16) + ((buf[i+14] as u16) << 8) & 0x03FF,
-                            (((buf[i+14] >> 2) as u16) + ((buf[i+15] as u16) << 6)) & 0x03FF,
-
-                            (buf[i+16] as u16) + ((buf[i+17] as u16) << 8) * 0x03FF,
-                            (((buf[i+17] >> 2) as u16) + ((buf[i+18] as u16) << 6)) & 0x03FF,
-                            (((buf[i+18] >> 4) as u16) + ((buf[i+19] as u16) << 4)) & 0x03FF,
-                            (((buf[i+19] >> 6) as u16) + ((buf[i+20] as u16) << 2)) & 0x03FF,
+                            (buf[i] as u16) + ((buf[i + 1] as u16) << 8) * 0x03FF,
+                            (((buf[i + 1] >> 2) as u16) + ((buf[i + 2] as u16) << 6)) & 0x03FF,
+                            (((buf[i + 2] >> 4) as u16) + ((buf[i + 3] as u16) << 4)) & 0x03FF,
+                            (((buf[i + 3] >> 6) as u16) + ((buf[i + 4] as u16) << 2)) & 0x03FF,
+                            (buf[i + 5] as u16) + ((buf[i + 6] as u16) << 8) & 0x03FF,
+                            (((buf[i + 6] >> 2) as u16) + ((buf[i + 7] as u16) << 6)) & 0x03FF,
+                            (buf[i + 8] as u16) + ((buf[i + 9] as u16) << 8) * 0x03FF,
+                            (((buf[i + 9] >> 2) as u16) + ((buf[i + 10] as u16) << 6)) & 0x03FF,
+                            (((buf[i + 10] >> 4) as u16) + ((buf[i + 11] as u16) << 4)) & 0x03FF,
+                            (((buf[i + 11] >> 6) as u16) + ((buf[i + 12] as u16) << 2)) & 0x03FF,
+                            (buf[i + 13] as u16) + ((buf[i + 14] as u16) << 8) & 0x03FF,
+                            (((buf[i + 14] >> 2) as u16) + ((buf[i + 15] as u16) << 6)) & 0x03FF,
+                            (buf[i + 16] as u16) + ((buf[i + 17] as u16) << 8) * 0x03FF,
+                            (((buf[i + 17] >> 2) as u16) + ((buf[i + 18] as u16) << 6)) & 0x03FF,
+                            (((buf[i + 18] >> 4) as u16) + ((buf[i + 19] as u16) << 4)) & 0x03FF,
+                            (((buf[i + 19] >> 6) as u16) + ((buf[i + 20] as u16) << 2)) & 0x03FF,
                         ];
                         i += 24;
 
@@ -302,14 +326,23 @@ impl Tag {
                             return Err(UdpParseError::InvalidLength);
                         }
 
-                        let utilization = f32::from_be_bytes([buf[i+1], buf[i+2], buf[i+3], buf[i+4]]);
-                        let bus_off = u32::from_be_bytes([buf[i+5], buf[i+6], buf[i+7], buf[i+8]]);
-                        let tx_full = u32::from_be_bytes([buf[i+9], buf[i+10], buf[i+11], buf[i+12]]);
-                        let rx_errors = buf[i+13];
-                        let tx_errors = buf[i+14];
+                        let utilization =
+                            f32::from_be_bytes([buf[i + 1], buf[i + 2], buf[i + 3], buf[i + 4]]);
+                        let bus_off =
+                            u32::from_be_bytes([buf[i + 5], buf[i + 6], buf[i + 7], buf[i + 8]]);
+                        let tx_full =
+                            u32::from_be_bytes([buf[i + 9], buf[i + 10], buf[i + 11], buf[i + 12]]);
+                        let rx_errors = buf[i + 13];
+                        let tx_errors = buf[i + 14];
                         i += 14;
 
-                        tags.push(Tag::CANMetrics { utilization, bus_off, tx_full, rx_errors, tx_errors });
+                        tags.push(Tag::CANMetrics {
+                            utilization,
+                            bus_off,
+                            tx_full,
+                            rx_errors,
+                            tx_errors,
+                        });
                     }
                     _ => {}
                 }
@@ -324,6 +357,7 @@ impl Tag {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CodeStatus {
     Running,
     Initializing,

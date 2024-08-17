@@ -10,6 +10,8 @@ fn main() {
         robot.set_enabled(enabled);
         enabled = !enabled;
 
+        println!("{}", robot.enabled());
+
         std::thread::sleep(Duration::from_secs(1));
     }
 }
