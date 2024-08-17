@@ -82,10 +82,7 @@ pub struct MatchInfo {
 
 impl MatchInfo {
     pub fn new(competition: Option<CString>, ty: MatchType) -> Self {
-        MatchInfo {
-            competition,
-            ty,
-        }
+        MatchInfo { competition, ty }
     }
 
     fn len(&self) -> u8 {

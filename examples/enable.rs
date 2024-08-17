@@ -4,7 +4,7 @@ use driverstation::Robot;
 
 fn main() {
     let mut robot = Robot::new(8891);
-    
+
     let mut enabled = false;
     loop {
         robot.set_enabled(enabled);

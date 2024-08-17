@@ -11,15 +11,18 @@ pub mod send {
 
 pub mod traits;
 
-use tokio::{io::{self, AsyncWriteExt}, select};
-use tokio::net::{TcpStream, UdpSocket};
 use send::tcp::{self, MatchInfo, MatchType, TcpEvent};
 use send::udp;
 use send::udp::UdpEvent;
 use serde::{Deserialize, Serialize};
-use std::net::SocketAddr; 
+use std::net::SocketAddr;
 use std::sync::mpsc::{channel, Receiver, SendError, Sender};
 use std::time::{Duration, Instant};
+use tokio::net::{TcpStream, UdpSocket};
+use tokio::{
+    io::{self, AsyncWriteExt},
+    select,
+};
 use traits::Bytes;
 
 const UDP_PORT: u16 = 1110;
@@ -51,12 +54,14 @@ impl Robot {
 
         let (tcp_tx, tcp_rx) = channel();
         tokio::task::spawn(tcp_thread(team_ip, tcp_rx, conn_tx));
-        
+
         let (udp_tx, udp_rx) = channel();
         tokio::task::spawn(udp_thread(team_ip, udp_rx, conn_rx));
 
         tcp_tx.send(TcpEvent::GameData(GameData::empty())).unwrap();
-        tcp_tx.send(TcpEvent::MatchInfo(MatchInfo::new(None, MatchType::None))).unwrap();
+        tcp_tx
+            .send(TcpEvent::MatchInfo(MatchInfo::new(None, MatchType::None)))
+            .unwrap();
 
         Robot {
             team: team_number,
@@ -95,7 +100,11 @@ impl Robot {
     }
 }
 
-async fn tcp_thread(team_ip: [u8; 4], rx: Receiver<TcpEvent>, conn_tx: Sender<Location>) -> std::io::Result<()> {
+async fn tcp_thread(
+    team_ip: [u8; 4],
+    rx: Receiver<TcpEvent>,
+    conn_tx: Sender<Location>,
+) -> std::io::Result<()> {
     let mut team_addr = SocketAddr::from((team_ip, TCP_PORT));
     let sim_addr = SocketAddr::from((SIM_IP, TCP_PORT));
 
@@ -156,7 +165,11 @@ async fn tcp_thread(team_ip: [u8; 4], rx: Receiver<TcpEvent>, conn_tx: Sender<Lo
     }
 }
 
-async fn udp_thread(team_ip: [u8; 4], rx: Receiver<UdpEvent>, conn_rx: Receiver<Location>) -> std::io::Result<()> {
+async fn udp_thread(
+    team_ip: [u8; 4],
+    rx: Receiver<UdpEvent>,
+    conn_rx: Receiver<Location>,
+) -> std::io::Result<()> {
     let mut team_addr = SocketAddr::from((team_ip, UDP_PORT));
     let sim_addr = SocketAddr::from((SIM_IP, UDP_PORT));
 
@@ -169,7 +182,7 @@ async fn udp_thread(team_ip: [u8; 4], rx: Receiver<UdpEvent>, conn_rx: Receiver<
     let mut mode = Mode::Teleoperated;
     let mut restarting_code = false;
     let mut tags = Vec::new();
-    
+
     for connection in conn_rx {
         if connection != Location::None {
             let (bind_addr, rio_addr) = match connection {
@@ -200,12 +213,11 @@ async fn udp_thread(team_ip: [u8; 4], rx: Receiver<UdpEvent>, conn_rx: Receiver<
                         UdpEvent::RestartCode => restarting_code = true,
                         UdpEvent::RebootRoborio => rebooting_roborio = true,
                     }
-                    
                 }
 
                 let mut send_tags = Vec::new();
                 send_tags.append(&mut tags);
-            
+
                 let packet = udp::Packet::default()
                     .with_sequence(sequence)
                     .with_enabled(enabled)
@@ -216,7 +228,7 @@ async fn udp_thread(team_ip: [u8; 4], rx: Receiver<UdpEvent>, conn_rx: Receiver<
                     .with_reboot_roborio(rebooting_roborio)
                     .with_restart_code(restarting_code)
                     .with_tags(send_tags);
-                
+
                 let mut send = Vec::new();
                 packet.write_bytes(&mut send);
                 udp_tx.send(&send).await?;
@@ -226,19 +238,17 @@ async fn udp_thread(team_ip: [u8; 4], rx: Receiver<UdpEvent>, conn_rx: Receiver<
 
                 let mut buf = [0u8; 100];
                 match udp_rx.try_recv(&mut buf) {
-                    Ok(bytes) => {
-
-                    }
-                    Err(err) => {
-                        
-                    }
+                    Ok(bytes) => {}
+                    Err(err) => {}
                 }
 
                 println!("after");
 
                 let duration = Instant::now().duration_since(start);
                 if duration < Duration::from_millis(20) {
-                    std::thread::sleep(Duration::from_millis(20) - Instant::now().duration_since(start));
+                    std::thread::sleep(
+                        Duration::from_millis(20) - Instant::now().duration_since(start),
+                    );
                 }
             }
         }
@@ -248,7 +258,9 @@ async fn udp_thread(team_ip: [u8; 4], rx: Receiver<UdpEvent>, conn_rx: Receiver<
 }
 
 async fn tcp_connect(ip: SocketAddr, location: Location) -> io::Result<(Location, TcpStream)> {
-    TcpStream::connect(ip).await.map(|stream| (location, stream))
+    TcpStream::connect(ip)
+        .await
+        .map(|stream| (location, stream))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -317,26 +329,24 @@ pub struct GameData {
 
 impl GameData {
     pub fn empty() -> Self {
-        GameData {
-            chars: [None; 3],
-        }
+        GameData { chars: [None; 3] }
     }
 
     pub fn single(character: u8) -> Self {
         GameData {
-            chars: [Some(character), None, None]
+            chars: [Some(character), None, None],
         }
     }
 
     pub fn double(first: u8, second: u8) -> Self {
         GameData {
-            chars: [Some(first), Some(second), None]
+            chars: [Some(first), Some(second), None],
         }
     }
 
     pub fn triple(first: u8, second: u8, third: u8) -> Self {
         GameData {
-            chars: [Some(first), Some(second), Some(third)]
+            chars: [Some(first), Some(second), Some(third)],
         }
     }
 
