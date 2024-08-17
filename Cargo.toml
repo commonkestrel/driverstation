@@ -4,9 +4,7 @@ name = "driverstation"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-async-std = { version = "1.12.0", features = ["unstable"] }
 macros = { path = "./macros" }
-serde = { version = "1.0.207", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["net", "rt", "macros", "io-util"] }

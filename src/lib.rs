@@ -11,17 +11,15 @@ pub mod send {
 
 pub mod traits;
 
-use async_std::io;
-use async_std::prelude::*;
-use async_std::net::{SocketAddr, TcpStream, UdpSocket};
-use send::tcp::Joystick;
+use tokio::{io::{self, AsyncWriteExt}, select};
+use tokio::net::{TcpStream, UdpSocket};
 use send::tcp::{self, MatchInfo, MatchType, TcpEvent};
 use send::udp;
 use send::udp::UdpEvent;
 use serde::{Deserialize, Serialize};
+use std::net::SocketAddr; 
 use std::sync::mpsc::{channel, Receiver, SendError, Sender};
 use std::time::{Duration, Instant};
-use std::io::Write;
 use traits::Bytes;
 
 const UDP_PORT: u16 = 1110;
@@ -29,8 +27,10 @@ const TCP_PORT: u16 = 1740;
 const SIM_IP: [u8; 4] = [127, 0, 0, 1];
 
 // There's probably an IP address that DriverStation connects from
-const DS_UDP_IP: [u8; 4] = [127, 0, 0, 1];
-const DS_UDP_PORT: u16 = 64651;
+const DS_UDP_IP: [u8; 4] = [0, 0, 0, 0];
+const DS_SIM_UDP_IP: [u8; 4] = [127, 0, 0, 1];
+const DS_UDP_TX_PORT: u16 = 6789;
+const DS_UDP_RX_PORT: u16 = 1150;
 
 pub struct Robot {
     team: u16,
@@ -50,10 +50,10 @@ impl Robot {
         let (conn_tx, conn_rx) = channel();
 
         let (tcp_tx, tcp_rx) = channel();
-        async_std::task::spawn(tcp_thread(team_ip, tcp_rx, conn_tx));
+        tokio::task::spawn(tcp_thread(team_ip, tcp_rx, conn_tx));
         
         let (udp_tx, udp_rx) = channel();
-        async_std::task::spawn(udp_thread(team_ip, udp_rx, conn_rx));
+        tokio::task::spawn(udp_thread(team_ip, udp_rx, conn_rx));
 
         tcp_tx.send(TcpEvent::GameData(GameData::empty())).unwrap();
         tcp_tx.send(TcpEvent::MatchInfo(MatchInfo::new(None, MatchType::None))).unwrap();
@@ -108,7 +108,13 @@ async fn tcp_thread(team_ip: [u8; 4], rx: Receiver<TcpEvent>, conn_tx: Sender<Lo
 
         let team_conn = tcp_connect(team_addr, Location::Team);
         let sim_conn = tcp_connect(sim_addr, Location::Sim);
-        let (location, mut conn) = match team_conn.try_race(sim_conn).await {
+
+        let conn_result = select! {
+            conn = team_conn => conn,
+            conn = sim_conn => conn,
+        };
+
+        let (location, mut conn) = match conn_result {
             Ok(conn) => conn,
             Err(_) => continue,
         };
@@ -154,7 +160,6 @@ async fn udp_thread(team_ip: [u8; 4], rx: Receiver<UdpEvent>, conn_rx: Receiver<
     let mut team_addr = SocketAddr::from((team_ip, UDP_PORT));
     let sim_addr = SocketAddr::from((SIM_IP, UDP_PORT));
 
-    let socket = UdpSocket::bind(SocketAddr::from((DS_UDP_IP, DS_UDP_PORT))).await?;
     let mut sequence: u16 = 0x0000;
 
     let mut estopped = false;
@@ -167,12 +172,18 @@ async fn udp_thread(team_ip: [u8; 4], rx: Receiver<UdpEvent>, conn_rx: Receiver<
     
     for connection in conn_rx {
         if connection != Location::None {
-            let addr = match connection {
-                Location::Team => team_addr,
-                Location::Sim => sim_addr,
+            let (bind_addr, rio_addr) = match connection {
+                Location::Team => (DS_UDP_IP, team_addr),
+                Location::Sim => (DS_SIM_UDP_IP, sim_addr),
                 Location::None => unreachable!(),
             };
-            socket.connect(addr).await?;
+
+            let udp_tx = UdpSocket::bind(SocketAddr::from((bind_addr, DS_UDP_TX_PORT))).await?;
+            udp_tx.connect(rio_addr).await?;
+
+            let mut udp_rx = UdpSocket::bind(SocketAddr::from((bind_addr, DS_UDP_RX_PORT))).await?;
+            udp_rx.connect(rio_addr).await?;
+
             let mut rebooting_roborio = false;
 
             loop {
@@ -208,8 +219,22 @@ async fn udp_thread(team_ip: [u8; 4], rx: Receiver<UdpEvent>, conn_rx: Receiver<
                 
                 let mut send = Vec::new();
                 packet.write_bytes(&mut send);
-                socket.send(&send).await?;
+                udp_tx.send(&send).await?;
                 sequence = sequence.wrapping_add(1);
+
+                println!("before");
+
+                let mut buf = [0u8; 100];
+                match udp_rx.try_recv(&mut buf) {
+                    Ok(bytes) => {
+
+                    }
+                    Err(err) => {
+                        
+                    }
+                }
+
+                println!("after");
 
                 let duration = Instant::now().duration_since(start);
                 if duration < Duration::from_millis(20) {
