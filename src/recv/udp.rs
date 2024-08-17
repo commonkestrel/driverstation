@@ -173,7 +173,7 @@ pub enum Tag {
         free_space: u32,
     },
     PDPLog {
-        stats: [u16; 15],
+        stats: [u16; 16],
     },
     CANMetrics {
         utilization: f32,
@@ -268,7 +268,7 @@ impl Tag {
                         }
 
                         i += 1;
-                        let ports = [
+                        let stats = [
                             (buf[i] as u16) + ((buf[i+1] as u16) << 8) * 0x03FF,
                             (((buf[i+1] >> 2) as u16) + ((buf[i+2] as u16) << 6)) & 0x03FF,
                             (((buf[i+2] >> 4) as u16) + ((buf[i+3] as u16) << 4)) & 0x03FF,
@@ -289,6 +289,8 @@ impl Tag {
                             (((buf[i+19] >> 6) as u16) + ((buf[i+20] as u16) << 2)) & 0x03FF,
                         ];
                         i += 24;
+
+                        tags.push(Tag::PDPLog { stats })
                     }
                     0x09 => {
                         // Unknown value of length 9
