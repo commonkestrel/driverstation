@@ -216,7 +216,7 @@ impl Robot {
     }
 
     pub async fn state(&self) -> State {
-        self.state.read().await
+        *self.state.read().await
     }
 }
 
