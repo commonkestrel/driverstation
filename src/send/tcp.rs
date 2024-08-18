@@ -71,6 +71,7 @@ pub enum TcpEvent {
     GameData(GameData),
     MatchInfo(MatchInfo),
     Joystick(Joystick),
+    TeamNumber,
     Exit,
 }
 

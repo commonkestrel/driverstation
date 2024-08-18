@@ -91,6 +91,11 @@ impl Robot {
         self.queue_udp(UdpEvent::Alliance(alliance));
     }
 
+    pub fn set_team_number(&mut self, team_number: u16) {
+        self.queue_udp(UdpEvent::TeamNumber(team_number));
+        self.queue_tcp(TcpEvent::TeamNumber);
+    }
+
     pub fn queue_tcp(&mut self, ev: TcpEvent) {
         self.tcp_tx.send(ev).unwrap();
     }
@@ -236,9 +241,6 @@ async fn tcp_thread(
     mut rx: UnboundedReceiver<TcpEvent>,
     mut conn_rx: UnboundedReceiver<Option<SocketAddr>>,
 ) -> std::io::Result<()> {
-    let mut team_addr = SocketAddr::from((team_ip, TCP_PORT));
-    let sim_addr = SocketAddr::from((SIM_IP, TCP_PORT));
-
     let mut game_data = None;
     let mut match_info = None;
     let mut joysticks = Vec::new();
@@ -259,7 +261,7 @@ async fn tcp_thread(
         };
         conn.set_nodelay(true)?;
 
-        loop {
+        'conn: loop {
             let start = Instant::now();
 
             while let Ok(ev) = rx.try_recv() {
@@ -268,6 +270,7 @@ async fn tcp_thread(
                     TcpEvent::GameData(gd) => game_data = Some(gd),
                     TcpEvent::MatchInfo(mi) => match_info = Some(mi),
                     TcpEvent::Joystick(js) => joysticks.push(js),
+                    TcpEvent::TeamNumber => continue 'conn,
                 }
             }
 
@@ -313,14 +316,14 @@ async fn udp_thread(
     let mut restarting_code = false;
     let mut tags = Vec::new();
 
-    let udp_tx = UdpSocket::bind(SocketAddr::from((DS_UDP_IP, DS_UDP_TX_PORT))).await?;
-    let udp_rx = UdpSocket::bind(SocketAddr::from((DS_UDP_IP, DS_UDP_RX_PORT))).await?;
+    'conn: loop {
+        let udp_tx = UdpSocket::bind(SocketAddr::from((DS_UDP_IP, DS_UDP_TX_PORT))).await?;
+        let udp_rx = UdpSocket::bind(SocketAddr::from((DS_UDP_IP, DS_UDP_RX_PORT))).await?;
 
-    udp_tx.connect(sim_addr).await?;
-    udp_tx.connect(team_addr).await?;
-    let mut last = Instant::now();
+        udp_tx.connect(sim_addr).await?;
+        udp_tx.connect(team_addr).await?;
+        let mut last = Instant::now();
 
-    loop {
         let mut rebooting_roborio = false;
 
         loop {
@@ -336,6 +339,10 @@ async fn udp_thread(
                     UdpEvent::Tag(tag) => tags.push(tag),
                     UdpEvent::RestartCode => restarting_code = true,
                     UdpEvent::RebootRoborio => rebooting_roborio = true,
+                    UdpEvent::TeamNumber(num) => {
+                        team_addr = SocketAddr::from((ip_from_team(num), UDP_PORT));
+                        continue 'conn;
+                    }
                 }
             }
 
@@ -383,6 +390,7 @@ async fn udp_thread(
                     if last.elapsed() > Duration::from_millis(500) {
                         state.write().await.connected = false;
                         conn_tx.send(None).unwrap();
+                        break;
                     }
                 }
             }

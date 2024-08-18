@@ -108,6 +108,7 @@ pub enum UdpEvent {
     RestartCode,
     Alliance(Alliance),
     Tag(Tag),
+    TeamNumber(u16),
 }
 
 #[repr(transparent)]
