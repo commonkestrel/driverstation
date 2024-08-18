@@ -9,8 +9,8 @@ pub mod send {
     pub mod udp;
 }
 
-pub mod traits;
 mod sync;
+pub mod traits;
 
 use recv::udp::{CodeStatus, UdpResponse};
 use send::tcp::{self, MatchInfo, MatchType, TcpEvent};
@@ -18,11 +18,11 @@ use send::udp;
 use send::udp::UdpEvent;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
-use std::task::Poll;
-pub use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use std::sync::Arc;
+use std::task::Poll;
 use std::time::{Duration, Instant};
 use tokio::net::{TcpStream, UdpSocket};
+pub use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::sync::RwLock;
 use tokio::{
     io::{self, AsyncWriteExt},
@@ -248,7 +248,7 @@ async fn tcp_thread(
             Some(location) => match location {
                 Some(addr) => addr,
                 None => continue,
-            }
+            },
             None => return Ok(()),
         };
         addr.set_port(TCP_PORT);
@@ -363,20 +363,22 @@ async fn udp_thread(
 
             let mut buf = [0u8; 100];
             match udp_rx.try_recv_from(&mut buf) {
-                Ok((bytes, addr)) => if let Ok(packet) = UdpResponse::try_from(&buf[0..bytes]) {
-                    conn_tx.send(Some(addr)).unwrap();
-                    last = Instant::now();
-                    let mut current_state = state.write().await;
+                Ok((bytes, addr)) => {
+                    if let Ok(packet) = UdpResponse::try_from(&buf[0..bytes]) {
+                        conn_tx.send(Some(addr)).unwrap();
+                        last = Instant::now();
+                        let mut current_state = state.write().await;
 
-                    current_state.connected = true;
-                    current_state.enabled = packet.status.enabled();
-                    current_state.estopped = packet.status.estopped();
-                    current_state.mode = packet.status.mode();
-                    current_state.code = packet.status.code_start();
-                    current_state.battery = packet.battery.voltage();
-                } else if let Err(err) = UdpResponse::try_from(&buf[0..bytes]) {
-                    println!("{err:?}");
-                },
+                        current_state.connected = true;
+                        current_state.enabled = packet.status.enabled();
+                        current_state.estopped = packet.status.estopped();
+                        current_state.mode = packet.status.mode();
+                        current_state.code = packet.status.code_start();
+                        current_state.battery = packet.battery.voltage();
+                    } else if let Err(err) = UdpResponse::try_from(&buf[0..bytes]) {
+                        println!("{err:?}");
+                    }
+                }
                 Err(err) => {
                     if last.elapsed() > Duration::from_millis(500) {
                         state.write().await.connected = false;
@@ -387,9 +389,7 @@ async fn udp_thread(
 
             let duration = Instant::now().duration_since(start);
             if duration < Duration::from_millis(20) {
-                std::thread::sleep(
-                    Duration::from_millis(20) - start.elapsed(),
-                );
+                std::thread::sleep(Duration::from_millis(20) - start.elapsed());
             }
         }
     }

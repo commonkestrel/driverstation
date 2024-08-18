@@ -1,4 +1,4 @@
-use std::{f32::MIN, mem::size_of};
+use std::mem::size_of;
 
 use crate::Mode;
 
@@ -170,7 +170,7 @@ pub enum Tag {
         free_space: u32,
     },
     CPUInfo {
-        num_cpus: f32,
+        num_cpus: u8,
         critical: f32,
         above_normal: f32,
         normal: f32,
@@ -195,8 +195,8 @@ pub enum Tag {
 
 impl Tag {
     const JOYSTICK_OUTPUT_LENGTH: u8 = 8;
-    const DISK_INFO_LENGTH: u8 = 4;
-    const CPU_INFO_LENGTH: u8 = 5 * 4;
+    const DISK_INFO_LENGTH: u8 = 4 + 4;
+    const CPU_INFO_LENGTH: u8 = 1 + 8 + 8 + 4 * 4;
     const RAM_INFO_LENGTH: u8 = 2 * 4;
     const PDP_LOG_LENGTH: u8 = 1 + 21 + 3;
     const CAN_METRICS_LENGTH: u8 = 4 + 4 + 4 + 1 + 1;
@@ -209,7 +209,11 @@ impl Tag {
             let length = buf[i];
 
             if length as usize >= buf.len() - i {
-                println!("mismatched buffer size as {i}/{}: {length} != {}", buf.len(), buf.len() - i);
+                println!(
+                    "mismatched buffer size as {i}/{}: {length} != {}",
+                    buf.len(),
+                    buf.len() - i
+                );
                 println!("{buf:?}");
                 return Err(UdpParseError::InvalidTag);
             }
@@ -219,8 +223,12 @@ impl Tag {
                 match buf[i] {
                     0x01 => {
                         // Joystick Output
-                        if length - 1 < Self::JOYSTICK_OUTPUT_LENGTH {
-                            println!("invalid joystick length at {i}");
+                        if length - 1 != Self::JOYSTICK_OUTPUT_LENGTH {
+                            println!(
+                                "invalid joystick length at {i}: {} != {}",
+                                length - 1,
+                                Self::JOYSTICK_OUTPUT_LENGTH
+                            );
                             return Err(UdpParseError::InvalidTag);
                         }
 
@@ -238,10 +246,17 @@ impl Tag {
                     }
                     0x04 => {
                         // Disk Info
-                        if length - 1 < Self::DISK_INFO_LENGTH {
-                            println!("invalid disk info length at {i}");
+                        if length - 1 != Self::DISK_INFO_LENGTH {
+                            println!(
+                                "invalid disk info length at {i}: {} != {}",
+                                length - 1,
+                                Self::DISK_INFO_LENGTH
+                            );
                             return Err(UdpParseError::InvalidTag);
                         }
+
+                        // Unknown 4 byte value
+                        i += 4;
 
                         let free_space =
                             u32::from_be_bytes([buf[i + 1], buf[i + 2], buf[i + 3], buf[i + 4]]);
@@ -251,30 +266,39 @@ impl Tag {
                     }
                     0x05 => {
                         // CPU Info
-                        if length - 1 < Self::CPU_INFO_LENGTH {
-                            println!("invalid cpu info length at {i}");
+                        if length - 1 != Self::CPU_INFO_LENGTH {
+                            println!(
+                                "invalid cpu info length at {i}: {} != {}",
+                                length - 1,
+                                Self::CPU_INFO_LENGTH
+                            );
                             return Err(UdpParseError::InvalidTag);
                         }
 
-                        let num_cpus =
-                            f32::from_be_bytes([buf[i + 1], buf[i + 2], buf[i + 3], buf[i + 4]]);
+                        let num_cpus = buf[i + 1];
                         let critical =
-                            f32::from_be_bytes([buf[i + 5], buf[i + 6], buf[i + 7], buf[i + 8]]);
-                        let above_normal =
-                            f32::from_be_bytes([buf[i + 9], buf[i + 10], buf[i + 11], buf[i + 12]]);
-                        let normal = f32::from_be_bytes([
-                            buf[i + 13],
+                            f32::from_be_bytes([buf[i + 2], buf[i + 3], buf[i + 4], buf[i + 5]]);
+                        let above_normal = f32::from_be_bytes([
                             buf[i + 14],
                             buf[i + 15],
                             buf[i + 16],
-                        ]);
-                        let low = f32::from_be_bytes([
                             buf[i + 17],
+                        ]);
+                        let normal = f32::from_be_bytes([
                             buf[i + 18],
                             buf[i + 19],
                             buf[i + 20],
+                            buf[i + 21],
                         ]);
-                        i += 20;
+                        let low = f32::from_be_bytes([
+                            buf[i + 30],
+                            buf[i + 31],
+                            buf[i + 32],
+                            buf[i + 33],
+                        ]);
+                        i += 33;
+
+                        println!("CPU {{ num: {num_cpus}, critical: {critical}, above normal: {above_normal}, normal: {normal}, low: {low} }}");
 
                         tags.push(Tag::CPUInfo {
                             num_cpus,
@@ -286,8 +310,12 @@ impl Tag {
                     }
                     0x06 => {
                         // RAM Info
-                        if length - 1 < Self::RAM_INFO_LENGTH {
-                            println!("invalid RAM info length at {i}");
+                        if length - 1 != Self::RAM_INFO_LENGTH {
+                            println!(
+                                "invalid RAM info length at {i}: {} != {}",
+                                length - 1,
+                                Self::RAM_INFO_LENGTH
+                            );
                             return Err(UdpParseError::InvalidTag);
                         }
 
@@ -301,8 +329,12 @@ impl Tag {
                     }
                     0x08 => {
                         // PDP Log
-                        if length - 1 < Self::PDP_LOG_LENGTH {
-                            println!("invalid pdp info length at {i}");
+                        if length - 1 != Self::PDP_LOG_LENGTH {
+                            println!(
+                                "invalid pdp info length at {i}: {} != {}",
+                                length - 1,
+                                Self::PDP_LOG_LENGTH
+                            );
                             return Err(UdpParseError::InvalidTag);
                         }
 
@@ -335,8 +367,12 @@ impl Tag {
                     }
                     0x0e => {
                         // CAN Metrics
-                        if length - 1 < Self::CAN_METRICS_LENGTH {
-                            println!("invalid CAN metrics length at {i}");
+                        if length - 1 != Self::CAN_METRICS_LENGTH {
+                            println!(
+                                "invalid CAN metrics length at {i}: {} != {}",
+                                length - 1,
+                                Self::CAN_METRICS_LENGTH
+                            );
                             return Err(UdpParseError::InvalidLength);
                         }
 
@@ -363,8 +399,6 @@ impl Tag {
 
                 i += 1;
             }
-
-            i += 1;
         }
 
         Ok(tags)

@@ -8,10 +8,10 @@ pub enum Runtime {
 }
 
 impl Runtime {
-    pub fn current() -> io::Result<Runtime, > {
+    pub fn current() -> io::Result<Runtime> {
         match tokio::runtime::Handle::try_current() {
             Ok(rt) => Ok(Runtime::Handle(rt)),
-            Err(_) => Ok(Runtime::Runtime(tokio::runtime::Runtime::new()?))
+            Err(_) => Ok(Runtime::Runtime(tokio::runtime::Runtime::new()?)),
         }
     }
 
@@ -23,9 +23,9 @@ impl Runtime {
     }
 
     pub fn spawn<F>(&self, future: F) -> JoinHandle<F::Output>
-    where 
+    where
         F: Future + Send + 'static,
-        F::Output: Send + 'static
+        F::Output: Send + 'static,
     {
         match self {
             Runtime::Handle(rt) => rt.spawn(future),

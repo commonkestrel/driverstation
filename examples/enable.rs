@@ -11,6 +11,7 @@ fn main() {
         enabled = !enabled;
 
         println!("{}", robot.enabled());
+        println!("{}", robot.battery());
 
         std::thread::sleep(Duration::from_secs(1));
     }
