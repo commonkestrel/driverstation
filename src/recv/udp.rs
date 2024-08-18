@@ -33,7 +33,6 @@ impl TryFrom<&[u8]> for UdpResponse {
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         if value.len() < MIN_RESPONSE_SIZE {
-            println!("response too small");
             return Err(UdpParseError::InvalidTag);
         }
 
@@ -211,12 +210,6 @@ impl Tag {
             let length = buf[i];
 
             if length as usize >= buf.len() - i {
-                println!(
-                    "mismatched buffer size as {i}/{}: {length} != {}",
-                    buf.len(),
-                    buf.len() - i
-                );
-                println!("{buf:?}");
                 return Err(UdpParseError::InvalidTag);
             }
 
@@ -226,11 +219,6 @@ impl Tag {
                     0x01 => {
                         // Joystick Output
                         if length - 1 != Self::JOYSTICK_OUTPUT_LENGTH {
-                            println!(
-                                "invalid joystick length at {i}: {} != {}",
-                                length - 1,
-                                Self::JOYSTICK_OUTPUT_LENGTH
-                            );
                             return Err(UdpParseError::InvalidTag);
                         }
 
@@ -249,11 +237,6 @@ impl Tag {
                     0x04 => {
                         // Disk Info
                         if length - 1 != Self::DISK_INFO_LENGTH {
-                            println!(
-                                "invalid disk info length at {i}: {} != {}",
-                                length - 1,
-                                Self::DISK_INFO_LENGTH
-                            );
                             return Err(UdpParseError::InvalidTag);
                         }
 
@@ -269,11 +252,6 @@ impl Tag {
                     0x05 => {
                         // CPU Info
                         if length - 1 != Self::CPU_INFO_LENGTH {
-                            println!(
-                                "invalid cpu info length at {i}: {} != {}",
-                                length - 1,
-                                Self::CPU_INFO_LENGTH
-                            );
                             return Err(UdpParseError::InvalidTag);
                         }
 
@@ -300,8 +278,6 @@ impl Tag {
                         ]);
                         i += 33;
 
-                        println!("CPU {{ num: {num_cpus}, critical: {critical}, above normal: {above_normal}, normal: {normal}, low: {low} }}");
-
                         tags.push(Tag::CPUInfo {
                             num_cpus,
                             critical,
@@ -313,11 +289,6 @@ impl Tag {
                     0x06 => {
                         // RAM Info
                         if length - 1 != Self::RAM_INFO_LENGTH {
-                            println!(
-                                "invalid RAM info length at {i}: {} != {}",
-                                length - 1,
-                                Self::RAM_INFO_LENGTH
-                            );
                             return Err(UdpParseError::InvalidTag);
                         }
 
@@ -332,11 +303,6 @@ impl Tag {
                     0x08 => {
                         // PDP Log
                         if length - 1 != Self::PDP_LOG_LENGTH {
-                            println!(
-                                "invalid pdp info length at {i}: {} != {}",
-                                length - 1,
-                                Self::PDP_LOG_LENGTH
-                            );
                             return Err(UdpParseError::InvalidTag);
                         }
 
@@ -370,11 +336,6 @@ impl Tag {
                     0x0e => {
                         // CAN Metrics
                         if length - 1 != Self::CAN_METRICS_LENGTH {
-                            println!(
-                                "invalid CAN metrics length at {i}: {} != {}",
-                                length - 1,
-                                Self::CAN_METRICS_LENGTH
-                            );
                             return Err(UdpParseError::InvalidLength);
                         }
 

@@ -40,7 +40,7 @@ const DS_SIM_UDP_IP: [u8; 4] = [127, 0, 0, 1];
 const DS_UDP_TX_PORT: u16 = 56789;
 const DS_UDP_RX_PORT: u16 = 1150;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Robot {
     state: Arc<RwLock<State>>,
     tcp_tx: UnboundedSender<TcpEvent>,
@@ -140,36 +140,44 @@ impl Robot {
         self.rt.block_on(self._game_data())
     }
 
-    pub async fn _connected(&self) -> bool {
+    pub fn state(&self) -> State {
+        self.rt.block_on(self._state())
+    }
+
+    async fn _connected(&self) -> bool {
         self.state.read().await.connected
     }
 
-    pub async fn _enabled(&self) -> bool {
+    async fn _enabled(&self) -> bool {
         self.state.read().await.enabled
     }
 
-    pub async fn _estopped(&self) -> bool {
+    async fn _estopped(&self) -> bool {
         self.state.read().await.estopped
     }
 
-    pub async fn _alliance(&self) -> Alliance {
+    async fn _alliance(&self) -> Alliance {
         self.state.read().await.alliance
     }
 
-    pub async fn _mode(&self) -> Mode {
+    async fn _mode(&self) -> Mode {
         self.state.read().await.mode
     }
 
-    pub async fn _game_data(&self) -> GameData {
+    async fn _game_data(&self) -> GameData {
         self.state.read().await.game_data
     }
 
-    pub async fn _code(&self) -> CodeStatus {
+    async fn _code(&self) -> CodeStatus {
         self.state.read().await.code
     }
 
-    pub async fn _battery(&self) -> f32 {
+    async fn _battery(&self) -> f32 {
         self.state.read().await.battery
+    }
+
+    async fn _state(&self) -> State {
+        *self.state.read().await
     }
 }
 
@@ -206,18 +214,13 @@ impl Robot {
     pub async fn battery(&self) -> f32 {
         self.state.read().await.battery
     }
-}
 
-impl Serialize for Robot {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: serde::Serializer
-    {
-        self.rt.block_on(self.state.read()).serialize(serializer)
+    pub async fn state(&self) -> State {
+        self.state.read().await
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 struct State {
     connected: bool,
     team: u16,
