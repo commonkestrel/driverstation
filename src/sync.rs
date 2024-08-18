@@ -2,9 +2,19 @@ use std::{future::Future, io};
 
 use tokio::task::JoinHandle;
 
+#[derive(Debug)]
 pub enum Runtime {
     Runtime(tokio::runtime::Runtime),
     Handle(tokio::runtime::Handle),
+}
+
+impl Clone for Runtime {
+    fn clone(&self) -> Self {
+        match self {
+            Runtime::Runtime(rt) => Runtime::Handle(rt.handle().clone()),
+            Runtime::Handle(handle) => Runtime::Handle(handle.clone()),
+        }
+    }
 }
 
 impl Runtime {

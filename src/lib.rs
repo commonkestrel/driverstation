@@ -40,6 +40,7 @@ const DS_SIM_UDP_IP: [u8; 4] = [127, 0, 0, 1];
 const DS_UDP_TX_PORT: u16 = 56789;
 const DS_UDP_RX_PORT: u16 = 1150;
 
+#[derive(Debug, Clone)]
 pub struct Robot {
     state: Arc<RwLock<State>>,
     tcp_tx: UnboundedSender<TcpEvent>,
@@ -75,32 +76,32 @@ impl Robot {
         }
     }
 
-    pub fn set_enabled(&mut self, enabled: bool) {
+    pub fn set_enabled(&self, enabled: bool) {
         self.queue_udp(UdpEvent::Enabled(enabled));
     }
 
-    pub fn set_estopped(&mut self, estopped: bool) {
+    pub fn set_estopped(&self, estopped: bool) {
         self.queue_udp(UdpEvent::Estopped(estopped));
     }
 
-    pub fn set_mode(&mut self, mode: Mode) {
+    pub fn set_mode(&self, mode: Mode) {
         self.queue_udp(UdpEvent::Mode(mode));
     }
 
-    pub fn set_alliance(&mut self, alliance: Alliance) {
+    pub fn set_alliance(&self, alliance: Alliance) {
         self.queue_udp(UdpEvent::Alliance(alliance));
     }
 
-    pub fn set_team_number(&mut self, team_number: u16) {
+    pub fn set_team_number(&self, team_number: u16) {
         self.queue_udp(UdpEvent::TeamNumber(team_number));
         self.queue_tcp(TcpEvent::TeamNumber);
     }
 
-    pub fn queue_tcp(&mut self, ev: TcpEvent) {
+    pub fn queue_tcp(&self, ev: TcpEvent) {
         self.tcp_tx.send(ev).unwrap();
     }
 
-    pub fn queue_udp(&mut self, ev: UdpEvent) {
+    pub fn queue_udp(&self, ev: UdpEvent) {
         self.udp_tx.send(ev).unwrap();
     }
 }
@@ -207,6 +208,16 @@ impl Robot {
     }
 }
 
+impl Serialize for Robot {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer
+    {
+        self.rt.block_on(self.state.read()).serialize(serializer)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct State {
     connected: bool,
     team: u16,
@@ -455,7 +466,7 @@ impl Bytes for Alliance {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub struct GameData {
     chars: [Option<u8>; 3],
 }

@@ -1,5 +1,7 @@
 use std::mem::size_of;
 
+use serde::{Deserialize, Serialize};
+
 use crate::Mode;
 
 // sequence + comm_version + status + trace + battery + first_conn + tag length
@@ -405,7 +407,7 @@ impl Tag {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CodeStatus {
     Running,
     Initializing,
