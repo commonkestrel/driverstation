@@ -221,7 +221,7 @@ impl Robot {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-struct State {
+pub struct State {
     connected: bool,
     team: u16,
     estopped: bool,
