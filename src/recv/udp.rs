@@ -66,7 +66,6 @@ pub struct Status(u8);
 impl Status {
     const ESTOP_MASK: u8 = 0x80;
     const BROWNOUT_MASK: u8 = 0x10;
-    const CODE_START_MASK: u8 = 0x08;
     const ENABLED_MASK: u8 = 0x04;
     const MODE_MASK: u8 = 0x03;
 
@@ -80,13 +79,6 @@ impl Status {
 
     pub fn brownout(&self) -> bool {
         (self.0 & Self::BROWNOUT_MASK) > 0
-    }
-
-    pub fn code_start(&self) -> CodeStatus {
-        match self.0 & Self::CODE_START_MASK {
-            0 => CodeStatus::Running,
-            _ => CodeStatus::Initializing,
-        }
     }
 
     pub fn enabled(&self) -> bool {
@@ -117,8 +109,11 @@ impl Trace {
         Trace(bits)
     }
 
-    pub fn robot_code(&self) -> bool {
-        (self.0 & Self::ROBOT_CODE_MASK) > 0
+    pub fn robot_code(&self) -> CodeStatus {
+        match self.0 & Self::ROBOT_CODE_MASK {
+            0 => CodeStatus::Initializing,
+            _ => CodeStatus::Running,
+        }
     }
 
     pub fn is_roborio(&self) -> bool {

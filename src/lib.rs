@@ -394,7 +394,7 @@ async fn udp_thread(
                         current_state.enabled = packet.status.enabled();
                         current_state.estopped = packet.status.estopped();
                         current_state.mode = packet.status.mode();
-                        current_state.code = packet.status.code_start();
+                        current_state.code = packet.trace.robot_code();
                         current_state.battery = packet.battery.voltage();
                     } else if let Err(err) = UdpResponse::try_from(&buf[0..bytes]) {
                         println!("{err:?}");
@@ -402,7 +402,11 @@ async fn udp_thread(
                 }
                 Err(err) => {
                     if last.elapsed() > Duration::from_millis(500) {
-                        state.write().await.connected = false;
+                        // clear all state fields
+                        let mut current_state = state.write().await;
+                        let team = current_state.team;
+                        *current_state = State::new(team);
+
                         conn_tx.send(None).unwrap();
                         break;
                     }
