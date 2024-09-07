@@ -318,6 +318,7 @@ async fn udp_thread(
     conn_tx: UnboundedSender<Option<SocketAddr>>,
 ) -> std::io::Result<()> {
     let mut team_addr = SocketAddr::from((team_ip, UDP_PORT));
+    #[cfg(not(target_os = "linux"))]
     let sim_addr = SocketAddr::from((SIM_IP, UDP_PORT));
 
     let mut sequence: u16 = 0x0001;
@@ -334,8 +335,11 @@ async fn udp_thread(
         let udp_tx = UdpSocket::bind(SocketAddr::from((DS_UDP_IP, DS_UDP_TX_PORT))).await?;
         let udp_rx = UdpSocket::bind(SocketAddr::from((DS_UDP_IP, DS_UDP_RX_PORT))).await?;
 
-        udp_tx.connect(sim_addr).await?;
         udp_tx.connect(team_addr).await?;
+        
+        #[cfg(not(target_os = "linux"))]
+        udp_tx.connect(sim_addr).await?;
+        
         let mut last = Instant::now();
 
         let mut rebooting_roborio = false;
